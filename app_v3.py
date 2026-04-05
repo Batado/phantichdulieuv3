@@ -220,34 +220,30 @@ if df_all.empty:
 # ══════════════════════════════════════════════════════════════
 #  SIDEBAR FILTERS
 # ══════════════════════════════════════════════════════════════
-# ══════════════════════════════════════════════════════════════
-#  SIDEBAR FILTERS
-# ══════════════════════════════════════════════════════════════
 st.sidebar.markdown("---")
 st.sidebar.markdown("## 🔍 Bộ lọc")
 
 # Bộ lọc Phòng Kinh Doanh (Mã nhóm KH)
 if "Mã nhóm KH" in df_all.columns:
     phong_list = sorted(df_all["Mã nhóm KH"].dropna().astype(str).unique())
-    phong_chon = st.sidebar.multiselect("🏢 Phòng Kinh Doanh (Mã nhóm KH)", phong_list, default=phong_list)
+    phong_chon = st.sidebar.selectbox("🏢 Phòng Kinh Doanh (Mã nhóm KH)", phong_list)
 else:
-    phong_chon = []
+    phong_chon = None
 
-# Lọc theo Phòng Kinh Doanh trước
 df_phong = df_all.copy()
 if phong_chon:
-    df_phong = df_phong[df_phong["Mã nhóm KH"].astype(str).isin(phong_chon)]
+    df_phong = df_phong[df_phong["Mã nhóm KH"].astype(str) == phong_chon]
 
 # Bộ lọc Khu vực theo Phòng Kinh Doanh
 if "Khu vực" in df_phong.columns:
     kv_list = sorted(df_phong["Khu vực"].dropna().astype(str).unique())
-    kv_chon = st.sidebar.multiselect("🌍 Khu vực", kv_list, default=kv_list)
+    kv_chon = st.sidebar.selectbox("🌍 Khu vực", kv_list)
 else:
-    kv_chon = []
+    kv_chon = None
 
 df_kv = df_phong.copy()
 if kv_chon:
-    df_kv = df_kv[df_kv["Khu vực"].astype(str).isin(kv_chon)]
+    df_kv = df_kv[df_kv["Khu vực"].astype(str) == kv_chon]
 
 # Bộ lọc Tên Khách Hàng theo Phòng Kinh Doanh + Khu vực
 kh_list = sorted(df_kv["Tên khách hàng"].dropna().astype(str).unique())
@@ -265,7 +261,6 @@ df_ban = df[df["Loại GD"] == "Xuất bán"].copy()
 if df_ban.empty:
     st.warning("Không có dữ liệu xuất bán cho bộ lọc đã chọn.")
     st.stop()
-
 
 # ══════════════════════════════════════════════════════════════
 #  TABS
@@ -533,6 +528,18 @@ with tab5:
 #  TAB 6 – RỦI RO & BCCN
 # ══════════════════════════════════════════════════════════════
 with tab6:
+    st.markdown('<div class="section-title">📄 BCCN – Phân tích thanh toán & công nợ</div>', unsafe_allow_html=True)
+
+    # Hiển thị danh sách khách hàng theo điểm rủi ro (nếu đã có cột Điểm rủi ro)
+    if "Điểm rủi ro" in df_kv.columns:
+        df_risk = (df_kv.groupby(["Mã nhóm KH", "Tên khách hàng"])
+                   .agg(Diem_rui_ro=("Điểm rủi ro", "mean"))
+                   .reset_index()
+                   .sort_values(["Mã nhóm KH", "Diem_rui_ro"], ascending=[True, True]))
+        st.markdown("### 📉 Danh sách khách hàng theo điểm rủi ro (thấp → cao)")
+        st.dataframe(df_risk, use_container_width=True, hide_index=True)
+    else:
+        st.info("Chưa có dữ liệu điểm rủi ro để sắp xếp.")
     st.markdown('<div class="section-title">📄 BCCN – Phân tích thanh toán & công nợ</div>', unsafe_allow_html=True)
 
     ghi_chu_s = df["Ghi chú"].astype(str).str.upper() if "Ghi chú" in df.columns else pd.Series([""] * len(df))
