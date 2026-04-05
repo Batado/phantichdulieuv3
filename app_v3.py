@@ -233,34 +233,39 @@ if "Mã nhóm KH" in df_all.columns:
 else:
     phong_chon = []
 
-# Bộ lọc Khu vực
-if "Khu vực" in df_all.columns:
-    kv_list = sorted(df_all["Khu vực"].dropna().astype(str).unique())
+# Lọc theo Phòng Kinh Doanh trước
+df_phong = df_all.copy()
+if phong_chon:
+    df_phong = df_phong[df_phong["Mã nhóm KH"].astype(str).isin(phong_chon)]
+
+# Bộ lọc Khu vực theo Phòng Kinh Doanh
+if "Khu vực" in df_phong.columns:
+    kv_list = sorted(df_phong["Khu vực"].dropna().astype(str).unique())
     kv_chon = st.sidebar.multiselect("🌍 Khu vực", kv_list, default=kv_list)
 else:
     kv_chon = []
 
-# Bộ lọc Tên Khách Hàng
-kh_list = sorted(df_all["Tên khách hàng"].dropna().astype(str).unique())
+df_kv = df_phong.copy()
+if kv_chon:
+    df_kv = df_kv[df_kv["Khu vực"].astype(str).isin(kv_chon)]
+
+# Bộ lọc Tên Khách Hàng theo Phòng Kinh Doanh + Khu vực
+kh_list = sorted(df_kv["Tên khách hàng"].dropna().astype(str).unique())
 kh = st.sidebar.selectbox("👤 Khách hàng", kh_list)
 
 # Bộ lọc Quý
-quy_list = sorted(df_all["Quý"].dropna().unique())
+quy_list = sorted(df_kv["Quý"].dropna().unique())
 quy_chon = st.sidebar.multiselect("📅 Quý", quy_list, default=quy_list)
 
 # Áp dụng tất cả bộ lọc
-df = df_all.copy()
-if phong_chon:
-    df = df[df["Mã nhóm KH"].astype(str).isin(phong_chon)]
-if kv_chon:
-    df = df[df["Khu vực"].astype(str).isin(kv_chon)]
-df = df[(df["Tên khách hàng"].astype(str) == kh) & (df["Quý"].isin(quy_chon))].copy()
+df = df_kv[(df_kv["Tên khách hàng"].astype(str) == kh) & (df_kv["Quý"].isin(quy_chon))].copy()
 
 # Tạo df_ban cho các tab phân tích
 df_ban = df[df["Loại GD"] == "Xuất bán"].copy()
 if df_ban.empty:
     st.warning("Không có dữ liệu xuất bán cho bộ lọc đã chọn.")
     st.stop()
+
 
 # ══════════════════════════════════════════════════════════════
 #  TABS
