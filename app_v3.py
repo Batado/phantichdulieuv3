@@ -220,7 +220,7 @@ if df_all.empty:
 
 
 # ══════════════════════════════════════════════════════════════
-#  SIDEBAR FILTERS (lọc theo Phòng Kinh Doanh → Điểm rủi ro → Khách hàng)
+#  SIDEBAR FILTERS (lọc theo PKD → Điểm rủi ro → Khách hàng)
 # ══════════════════════════════════════════════════════════════
 st.sidebar.markdown("---")
 st.sidebar.markdown("## 🔍 Bộ lọc")
@@ -294,7 +294,6 @@ else:
 if df_ban.empty:
     st.warning("Không có dữ liệu xuất bán cho bộ lọc đã chọn.")
     st.stop()
-
 
 # ══════════════════════════════════════════════════════════════
 #  TABS
