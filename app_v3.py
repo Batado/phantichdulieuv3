@@ -582,7 +582,6 @@ with tab6:
     st.markdown("### 📉 Danh sách khách hàng theo điểm rủi ro (thấp → cao)")
     st.dataframe(df_risk_sorted, use_container_width=True, hide_index=True)
 
-    else:
         st.info("Chưa có dữ liệu điểm rủi ro để sắp xếp.")
     st.markdown('<div class="section-title">📄 BCCN – Phân tích thanh toán & công nợ</div>', unsafe_allow_html=True)
 
