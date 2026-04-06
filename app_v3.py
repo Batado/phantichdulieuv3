@@ -217,8 +217,10 @@ if df_all.empty:
     st.error("Không có dữ liệu hợp lệ. Vui lòng kiểm tra file và thử lại.")
     st.stop()
 
+
+
 # ══════════════════════════════════════════════════════════════
-#  SIDEBAR FILTERS
+#  SIDEBAR FILTERS (lọc theo Phòng Kinh Doanh → Điểm rủi ro → Khách hàng)
 # ══════════════════════════════════════════════════════════════
 st.sidebar.markdown("---")
 st.sidebar.markdown("## 🔍 Bộ lọc")
@@ -227,12 +229,10 @@ st.sidebar.markdown("## 🔍 Bộ lọc")
 if "Mã nhóm KH" in df_all.columns:
     phong_list = sorted(df_all["Mã nhóm KH"].dropna().astype(str).unique())
     phong_chon = st.sidebar.selectbox("🏢 Phòng Kinh Doanh (Mã nhóm KH)", phong_list)
+    df_phong = df_all[df_all["Mã nhóm KH"].astype(str) == phong_chon].copy()
 else:
     phong_chon = None
-
-df_phong = df_all.copy()
-if phong_chon:
-    df_phong = df_phong[df_phong["Mã nhóm KH"].astype(str) == phong_chon]
+    df_phong = df_all.copy()
 
 # --- Tính điểm rủi ro cho từng khách hàng trong phòng ---
 def tinh_diem_rui_ro(df_ban, df_tra2, df_bs):
@@ -265,24 +265,36 @@ df_risk = pd.DataFrame(risk_scores, columns=["Tên khách hàng", "Điểm rủi
 df_risk_sorted = df_risk.sort_values("Điểm rủi ro", ascending=True)
 
 # Bộ lọc Khách hàng theo điểm rủi ro
-kh_list = df_risk_sorted["Tên khách hàng"].tolist()
-kh = st.sidebar.selectbox("👤 Khách hàng (sắp xếp theo rủi ro)", kh_list)
+if not df_risk_sorted.empty:
+    kh_list = df_risk_sorted["Tên khách hàng"].tolist()
+    kh = st.sidebar.selectbox("👤 Khách hàng (sắp xếp theo rủi ro)", kh_list)
+else:
+    kh = None
 
 # Bộ lọc Quý
-if "Quý" in df_kv.columns:
-    quy_list = sorted(df_kv["Quý"].dropna().unique())
+if "Quý" in df_phong.columns:
+    quy_list = sorted(df_phong["Quý"].dropna().unique())
+    quy_chon = st.sidebar.multiselect("📅 Quý", quy_list, default=quy_list)
 else:
-    quy_list = []
-    
+    quy_chon = []
+
 # Áp dụng tất cả bộ lọc
-df = df_kv[(df_kv["Tên khách hàng"].astype(str) == kh) & (df_kv["Quý"].isin(quy_chon))].copy()
-df_ban = df[df["Loại GD"] == "Xuất bán"].copy()
+df = df_phong.copy()
+if kh:
+    df = df[df["Tên khách hàng"].astype(str) == kh]
+if quy_chon:
+    df = df[df["Quý"].isin(quy_chon)]
 
 # Tạo df_ban cho các tab phân tích
-df_ban = df[df["Loại GD"] == "Xuất bán"].copy()
+if "Loại GD" in df.columns:
+    df_ban = df[df["Loại GD"] == "Xuất bán"].copy()
+else:
+    df_ban = pd.DataFrame()
+
 if df_ban.empty:
     st.warning("Không có dữ liệu xuất bán cho bộ lọc đã chọn.")
     st.stop()
+
 
 # ══════════════════════════════════════════════════════════════
 #  TABS
