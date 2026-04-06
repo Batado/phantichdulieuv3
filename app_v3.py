@@ -563,14 +563,25 @@ with tab5:
 with tab6:
     st.markdown('<div class="section-title">📄 BCCN – Phân tích thanh toán & công nợ</div>', unsafe_allow_html=True)
 
-    # Hiển thị danh sách khách hàng theo điểm rủi ro (nếu đã có cột Điểm rủi ro)
-    if "Điểm rủi ro" in df_kv.columns:
-        df_risk = (df_kv.groupby(["Mã nhóm KH", "Tên khách hàng"])
-                   .agg(Diem_rui_ro=("Điểm rủi ro", "mean"))
-                   .reset_index()
-                   .sort_values(["Mã nhóm KH", "Diem_rui_ro"], ascending=[True, True]))
-        st.markdown("### 📉 Danh sách khách hàng theo điểm rủi ro (thấp → cao)")
-        st.dataframe(df_risk, use_container_width=True, hide_index=True)
+    # Tính điểm rủi ro cho từng khách hàng trong phòng đã chọn
+    risk_scores = []
+    df_phong = df_all[df_all["Mã nhóm KH"].astype(str) == phong_chon]
+
+    for khach in df_phong["Tên khách hàng"].dropna().unique():
+        df_kh = df_phong[df_phong["Tên khách hàng"] == khach]
+        df_ban_kh = df_kh[df_kh["Loại GD"] == "Xuất bán"]
+        df_tra_kh = df_kh[df_kh["Loại GD"] == "Trả hàng"]
+        df_bs_kh  = df_kh[df_kh["Loại GD"] == "Xuất bổ sung"]
+
+        score = tinh_diem_rui_ro(df_ban_kh, df_tra_kh, df_bs_kh)
+        risk_scores.append((khach, score))
+
+    df_risk = pd.DataFrame(risk_scores, columns=["Tên khách hàng", "Điểm rủi ro"])
+    df_risk_sorted = df_risk.sort_values("Điểm rủi ro", ascending=True)
+
+    st.markdown("### 📉 Danh sách khách hàng theo điểm rủi ro (thấp → cao)")
+    st.dataframe(df_risk_sorted, use_container_width=True, hide_index=True)
+
     else:
         st.info("Chưa có dữ liệu điểm rủi ro để sắp xếp.")
     st.markdown('<div class="section-title">📄 BCCN – Phân tích thanh toán & công nợ</div>', unsafe_allow_html=True)
