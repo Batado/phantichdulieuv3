@@ -582,7 +582,7 @@ with tab6:
     st.markdown("### 📉 Danh sách khách hàng theo điểm rủi ro (thấp → cao)")
     st.dataframe(df_risk_sorted, use_container_width=True, hide_index=True)
 
-        st.info("Chưa có dữ liệu điểm rủi ro để sắp xếp.")
+    st.info("Chưa có dữ liệu điểm rủi ro để sắp xếp.")
     st.markdown('<div class="section-title">📄 BCCN – Phân tích thanh toán & công nợ</div>', unsafe_allow_html=True)
 
     ghi_chu_s = df["Ghi chú"].astype(str).str.upper() if "Ghi chú" in df.columns else pd.Series([""] * len(df))
