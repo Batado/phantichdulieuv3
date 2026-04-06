@@ -269,9 +269,11 @@ kh_list = df_risk_sorted["Tên khách hàng"].tolist()
 kh = st.sidebar.selectbox("👤 Khách hàng (sắp xếp theo rủi ro)", kh_list)
 
 # Bộ lọc Quý
-quy_list = sorted(df_kv["Quý"].dropna().unique())
-quy_chon = st.sidebar.multiselect("📅 Quý", quy_list, default=quy_list)
-
+if "Quý" in df_kv.columns:
+    quy_list = sorted(df_kv["Quý"].dropna().unique())
+else:
+    quy_list = []
+    
 # Áp dụng tất cả bộ lọc
 df = df_kv[(df_kv["Tên khách hàng"].astype(str) == kh) & (df_kv["Quý"].isin(quy_chon))].copy()
 df_ban = df[df["Loại GD"] == "Xuất bán"].copy()
