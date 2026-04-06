@@ -277,7 +277,34 @@ if "Quý" in df_phong.columns:
     quy_chon = st.sidebar.multiselect("📅 Quý", quy_list, default=quy_list)
 else:
     quy_chon = []
+# Sau khi chọn khách hàng
+if kh:
+    df_kh = df_phong[df_phong["Tên khách hàng"].astype(str) == kh]
+    df_ban_kh = df_kh[df_kh["Loại GD"] == "Xuất bán"]
+    df_tra_kh = df_kh[df_kh["Loại GD"] == "Trả hàng"]
+    df_bs_kh  = df_kh[df_kh["Loại GD"] == "Xuất bổ sung"]
 
+    # Tính điểm rủi ro cho khách hàng đang chọn
+    score = tinh_diem_rui_ro(df_ban_kh, df_tra_kh, df_bs_kh)
+
+    # Xác định mức rủi ro
+    if score >= 50:
+        color, label = "#e74c3c", "🔴 RỦI RO CAO"
+    elif score >= 25:
+        color, label = "#f39c12", "🟡 RỦI RO TRUNG BÌNH"
+    else:
+        color, label = "#26c281", "🟢 RỦI RO THẤP"
+
+    # Hiển thị ngay trong sidebar
+    st.sidebar.markdown(f"""
+    <div style='background:#1a2035;border-radius:8px;padding:10px;text-align:center;margin:8px 0;'>
+        <div style='font-size:18px;font-weight:700;color:{color};'>{label}</div>
+        <div style='font-size:14px;color:#9aa0b0;margin-top:4px;'>
+            Điểm rủi ro: <b style='color:{color}'>{score}/100</b>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
 # Áp dụng tất cả bộ lọc
 df = df_phong.copy()
 if kh:
