@@ -234,16 +234,6 @@ df_phong = df_all.copy()
 if phong_chon:
     df_phong = df_phong[df_phong["Mã nhóm KH"].astype(str) == phong_chon]
 
-# Bộ lọc Khu vực theo Phòng Kinh Doanh
-if "Khu vực" in df_phong.columns:
-    kv_list = sorted(df_phong["Khu vực"].dropna().astype(str).unique())
-    kv_chon = st.sidebar.selectbox("🌍 Khu vực", kv_list)
-else:
-    kv_chon = None
-
-df_kv = df_phong.copy()
-if kv_chon:
-    df_kv = df_kv[df_kv["Khu vực"].astype(str) == kv_chon]
 
 # Bộ lọc Tên Khách Hàng theo Phòng Kinh Doanh + Khu vực
 kh_list = sorted(df_kv["Tên khách hàng"].dropna().astype(str).unique())
