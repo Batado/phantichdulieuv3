@@ -277,6 +277,12 @@ if "Quý" in df_phong.columns:
     quy_chon = st.sidebar.multiselect("📅 Quý", quy_list, default=quy_list)
 else:
     quy_chon = []
+# Bộ lọc Tháng
+if "Tháng" in df_phong.columns:
+    thang_list = sorted(df_phong["Tháng"].dropna().unique())
+    thang_chon = st.sidebar.multiselect("🗓️ Tháng", thang_list, default=thang_list)
+else:
+    thang_chon = []
 # Sau khi chọn khách hàng
 if kh:
     df_kh = df_phong[df_phong["Tên khách hàng"].astype(str) == kh]
@@ -311,6 +317,8 @@ if kh:
     df = df[df["Tên khách hàng"].astype(str) == kh]
 if quy_chon:
     df = df[df["Quý"].isin(quy_chon)]
+if thang_chon:
+    df = df[df["Tháng"].isin(thang_chon)]
 
 # Tạo df_ban cho các tab phân tích
 if "Loại GD" in df.columns:
