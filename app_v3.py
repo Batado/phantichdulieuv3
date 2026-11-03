@@ -678,7 +678,13 @@ for _, row in customer_summary.iterrows():
         bool(row["So_kho"]),
         bool((customer_vehicle["_customer_key"] == key).any()) if not customer_vehicle.empty else False,
     ]) / 4
-    enough = has_critical_fields and coverage >= 0.5
+    has_customer_vehicle_data = (
+        bool((customer_vehicle["_customer_key"] == key).any())
+        if not customer_vehicle.empty else False
+    )
+    # Do not assign a green/low result when the NPP has no evidence
+    # for the currently enabled customer-vehicle control.
+    enough = has_critical_fields and coverage >= 0.75 and has_customer_vehicle_data
     level = make_risk_label(score, enough)
     reasons = []
     actions = []
