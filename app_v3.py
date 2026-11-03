@@ -363,7 +363,7 @@ def warehouse_check(region, warehouse):
 
 def extract_warehouse_codes(value):
     """Trích mã kho 3 chữ số từ cột kho lấy hàng vùng miền trong workbook."""
-    return set(re.findall(r"(?<!\\d)(\\d{3})(?!\\d)", clean(value)))
+    return set(re.findall(r"(?<!\d)(\d{3})(?!\d)", clean(value)))
 
 
 def classify_workbook_note(value):
