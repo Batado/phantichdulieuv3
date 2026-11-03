@@ -658,35 +658,67 @@ if any(x is None for x in required):
 BASE = RAW.copy()
 
 if group_col:
-    group_values = sorted(BASE[group_col].dropna().astype(str).unique())
-    suggested = [x for x in group_values if "npp" in norm(x) or "nha phan phoi" in norm(x)]
+    group_values = sorted(
+        BASE[group_col].dropna().astype(str).str.strip().unique().tolist()
+    )
+    suggested = [
+        x for x in group_values
+        if "npp" in norm(x) or "nha phan phoi" in norm(x)
+    ]
 
     with st.sidebar:
         st.markdown("---")
         st.markdown("## 3. PHẠM VI NPP")
-        if suggested:
-            selected_groups = st.multiselect(
-                "Nhóm khách hàng NPP",
-                group_values,
-                default=suggested
-            )
-        else:
-            selected_groups = st.multiselect(
-                "Chọn đúng nhóm NPP",
-                group_values,
-                default=[]
-            )
+        st.caption(f"Cột nhóm đang dùng: {group_col}")
+        selected_groups = st.multiselect(
+            "Chọn giá trị nhóm khách hàng là NPP",
+            options=group_values,
+            default=suggested,
+            help="Chọn đúng mã/nhóm NPP theo danh mục khách hàng của công ty."
+        )
+        confirm_all_npp = st.checkbox(
+            "File này đã được lọc chỉ còn khách hàng NPP",
+            value=False,
+            help="Chỉ tích nếu bạn chắc chắn toàn bộ dòng trong file đều là NPP."
+        )
 
-    if not selected_groups:
-        st.warning("Chưa chọn nhóm NPP. Không tự suy đoán toàn bộ dữ liệu là NPP.")
+    if selected_groups:
+        BASE = BASE[
+            BASE[group_col].astype(str).str.strip().isin(selected_groups)
+        ].copy()
+    elif confirm_all_npp:
+        # Explicit user confirmation; do not silently classify every customer as NPP.
+        BASE = BASE.copy()
+        st.info(
+            f"Đã xác nhận file chỉ gồm NPP. Hệ thống phân tích {len(BASE):,} dòng "
+            f"theo cột nhóm '{group_col}'."
+        )
+    else:
+        st.warning(
+            "Chưa xác định phạm vi NPP. Ở thanh bên trái, hãy chọn giá trị nhóm NPP "
+            "hoặc tích xác nhận file chỉ chứa NPP. Hệ thống chưa chạy phân tích để "
+            "tránh đưa khách hàng khác loại vào kết quả."
+        )
+        st.dataframe(
+            pd.DataFrame({
+                "Giá trị nhóm tìm thấy trong file": group_values
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
         st.stop()
-
-    BASE = BASE[BASE[group_col].astype(str).isin(selected_groups)].copy()
 else:
     with st.sidebar:
-        only_npp = st.checkbox("Xác nhận file chỉ có khách hàng NPP", value=False)
+        only_npp = st.checkbox(
+            "Xác nhận file chỉ có khách hàng NPP",
+            value=False,
+            help="Tích nếu báo cáo Excel đã được lọc riêng khách hàng Nhà phân phối."
+        )
     if not only_npp:
-        st.warning("Không có cột nhóm khách hàng. Hãy xác nhận file chỉ chứa NPP.")
+        st.warning(
+            "Không ánh xạ được cột nhóm khách hàng. Hãy ánh xạ đúng cột nhóm "
+            "hoặc xác nhận file chỉ chứa NPP."
+        )
         st.stop()
 
 if BASE.empty:
