@@ -302,7 +302,10 @@ def identify_region(region_value, address):
     for group, rule in ADDRESS_WAREHOUSE_RULES.items():
         for keyword in rule["keywords"]:
             key = norm(keyword)
-            if key and key in a:
+            # Match whole phrase boundaries; tránh "Huế" bị nhận nhầm
+            # bên trong từ "huyện".
+            pattern = r"(?<![a-z0-9])" + re.escape(key) + r"(?![a-z0-9])"
+            if key and re.search(pattern, a):
                 matches.append((len(key), group))
     if matches:
         matches.sort(reverse=True)
