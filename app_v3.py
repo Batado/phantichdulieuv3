@@ -69,9 +69,10 @@ WAREHOUSE_NAMES = {
 
 # Danh sách mã kho phù hợp theo vùng theo quy tắc đã cung cấp.
 WAREHOUSE_RULES = {
-    "Miền Nam và Tây Nam Bộ": {"053", "281", "284", "054"},
-    "Miền Trung và Tây Nguyên": {"053", "252", "251", "261", "263", "284", "291"},
-    "Miền Bắc": {"291", "261"},
+    # Bao gồm các mã khác nhau nhưng cùng tên/địa điểm kho theo danh mục.
+    "Miền Nam và Tây Nam Bộ": {"053", "054", "055", "281", "283", "284", "285"},
+    "Miền Trung và Tây Nguyên": {"053", "054", "055", "251", "252", "253", "254", "261", "262", "263", "264", "284", "285", "291"},
+    "Miền Bắc": {"261", "262", "291"},
 }
 REGION_WORDS = {
     "Miền Nam và Tây Nam Bộ": [
