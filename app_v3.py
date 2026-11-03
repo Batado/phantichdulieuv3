@@ -73,7 +73,7 @@ WAREHOUSE_NAMES = {
 WAREHOUSE_RULES = {
     "Miền Nam và Tây Nam Bộ": {"053", "054", "055", "281", "283", "284", "285"},
     "Miền Trung và Tây Nguyên": {"251", "252", "253", "254", "263", "264", "284", "285", "301", "302"},
-    "Miền Bắc": {"261", "262", "291", "301", "302"},
+    "Miền Bắc": {"261", "262", "291"},
 }
 SPECIAL_WAREHOUSES = {"282", "292"}
 WAREHOUSE_STATUS_OUTSIDE = "Ngoài vùng ưu tiên - cần xác minh"
