@@ -67,13 +67,18 @@ WAREHOUSE_NAMES = {
     "302": "TK Nam Cấm",
 }
 
-# Danh sách mã kho phù hợp theo vùng theo quy tắc đã cung cấp.
+# Quy tắc sàng lọc theo vị trí kho và vùng địa lý.
+# Đây là ma trận ưu tiên sơ bộ để phát hiện giao dịch cần xác minh,
+# không thay thế định tuyến thực tế, cước vận chuyển hoặc phê duyệt điều phối.
 WAREHOUSE_RULES = {
-    # Bao gồm các mã khác nhau nhưng cùng tên/địa điểm kho theo danh mục.
     "Miền Nam và Tây Nam Bộ": {"053", "054", "055", "281", "283", "284", "285"},
-    "Miền Trung và Tây Nguyên": {"053", "054", "055", "251", "252", "253", "254", "261", "262", "263", "264", "284", "285", "291"},
-    "Miền Bắc": {"261", "262", "291"},
+    "Miền Trung và Tây Nguyên": {"251", "252", "253", "254", "263", "264", "284", "285", "301", "302"},
+    "Miền Bắc": {"261", "262", "291", "301", "302"},
 }
+SPECIAL_WAREHOUSES = {"282", "292"}
+WAREHOUSE_STATUS_OUTSIDE = "Ngoài vùng ưu tiên - cần xác minh"
+WAREHOUSE_STATUS_SPECIAL = "Kho hàng gửi HS Home - cần xác minh riêng"
+
 REGION_WORDS = {
     "Miền Nam và Tây Nam Bộ": [
         "ho chi minh", "tp hcm", "tphcm", "sai gon", "binh duong",
@@ -304,9 +309,9 @@ def identify_region(region_value, address):
 
 
 def extract_warehouse_code(document_number):
-    """Lấy đúng 3 chữ số đầu của số chứng từ, ví dụ 263.18067094 -> 263."""
+    """Lấy 3 chữ số đầu của Số chứng từ: 263.18067094 -> 263."""
     text = clean(document_number).strip()
-    match = re.match(r"^(\d{3})(?:\.|\b)", text)
+    match = re.match(r"^(\d{3})(?:[.\\-/]|\\s|$)", text)
     return match.group(1) if match else ""
 
 
@@ -319,11 +324,13 @@ def warehouse_check(region, warehouse):
         return "Không trích xuất được mã kho từ số chứng từ"
     if warehouse not in WAREHOUSE_NAMES:
         return "Mã kho chưa có trong danh mục"
+    if warehouse in SPECIAL_WAREHOUSES:
+        return WAREHOUSE_STATUS_SPECIAL
     if region not in WAREHOUSE_RULES:
         return "Chưa đủ dữ liệu địa chỉ/vùng"
     if warehouse in WAREHOUSE_RULES[region]:
-        return "Phù hợp danh sách vùng"
-    return "Ngoài danh sách kho phù hợp vùng"
+        return "Phù hợp vùng ưu tiên"
+    return WAREHOUSE_STATUS_OUTSIDE
 
 
 def money_fmt(value):
@@ -567,7 +574,10 @@ customer_summary = (
 # Warehouse: evaluate customer-owned vehicle transactions only.
 customer_vehicle = filtered[filtered["_loai_xe"] == "Xe khách hàng"].copy()
 warehouse_evidence = customer_vehicle[
-    customer_vehicle["_doi_chieu_kho"] == "Ngoài danh sách cho phép"
+    customer_vehicle["_doi_chieu_kho"] == WAREHOUSE_STATUS_OUTSIDE
+].copy()
+warehouse_special = customer_vehicle[
+    customer_vehicle["_doi_chieu_kho"] == WAREHOUSE_STATUS_SPECIAL
 ].copy()
 warehouse_unknown = customer_vehicle[
     customer_vehicle["_doi_chieu_kho"].isin([
@@ -890,11 +900,11 @@ with tab_warehouse:
     c.metric("Chưa đủ dữ liệu", f"{len(warehouse_unknown):,}")
     if not warehouse_counts.empty:
         st.dataframe(warehouse_counts, use_container_width=True, hide_index=True)
-    st.markdown("### Giao dịch ngoài danh sách kho")
+    st.markdown("### Giao dịch kho ngoài vùng ưu tiên")
     if warehouse_evidence.empty:
-        st.success("Không có giao dịch ngoài danh sách kho theo quy tắc hiện tại.")
+        st.success("Không có giao dịch ngoài vùng ưu tiên theo ma trận sàng lọc hiện tại.")
     else:
-        st.warning(f"Có {len(warehouse_evidence):,} dòng cần xác minh.")
+        st.warning(f"Có {len(warehouse_evidence):,} dòng cần xác minh khoảng cách, điều phối và lý do chọn kho.")
         st.dataframe(warehouse_evidence[[
             "_ten_kh", "_dia_chi", "_mien_goc", "_vung", "_chung_tu", "_ma_kho", "_ten_kho",
             "_doi_chieu_kho", "_ngay", "_bien_so_goc"
@@ -904,6 +914,21 @@ with tab_warehouse:
             "_ten_kho": "Tên kho theo danh mục", "_doi_chieu_kho": "Kết quả đối chiếu", "_ngay": "Ngày",
             "_chung_tu": "Chứng từ", "_bien_so_goc": "Số xe gốc"
         }), use_container_width=True, hide_index=True)
+    st.markdown("### Kho hàng gửi tại HS Home của HSN Phú Mỹ")
+    if warehouse_special.empty:
+        st.info("Không có giao dịch thuộc mã kho HS Home (282/292).")
+    else:
+        st.warning("Không xếp 282/292 vào nhóm phù hợp vùng thông thường. Cần kiểm tra vị trí lưu hàng, phiếu nhập/xuất và đơn vị quản lý kho.")
+        st.dataframe(warehouse_special[[
+            "_ten_kh", "_dia_chi", "_vung", "_chung_tu", "_ma_kho", "_ten_kho",
+            "_doi_chieu_kho", "_ngay", "_bien_so_goc"
+        ]].rename(columns={
+            "_ten_kh": "NPP", "_dia_chi": "Địa chỉ", "_vung": "Vùng",
+            "_chung_tu": "Chứng từ", "_ma_kho": "Mã kho",
+            "_ten_kho": "Tên kho", "_doi_chieu_kho": "Kết quả",
+            "_ngay": "Ngày", "_bien_so_goc": "Biển số xe"
+        }), use_container_width=True, hide_index=True)
+
     st.markdown("### Giao dịch chưa đủ dữ liệu")
     if warehouse_unknown.empty:
         st.success("Không có giao dịch kho thiếu thông tin.")
@@ -1049,7 +1074,8 @@ export_sheets = {
     "Tong_hop_rui_ro": risk_summary,
     "Doanh_thu_mat_hang": product_summary,
     "Theo_thang": monthly_sales,
-    "Kho_ngoai_danh_sach": warehouse_evidence,
+    "Kho_ngoai_vung_uu_tien": warehouse_evidence,
+    "Kho_HS_Home_can_xac_minh": warehouse_special,
     "Kho_chua_du_du_lieu": warehouse_unknown,
     "Xe_cung_ngay": vehicle_day_shared,
     "Xe_nhieu_ngay": vehicle_period_shared,
