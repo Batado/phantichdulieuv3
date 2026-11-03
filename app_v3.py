@@ -635,12 +635,13 @@ with st.sidebar:
 
     customer_col = choose_column("Tên khách hàng", "customer", True)
     customer_id_col = choose_column("Mã khách hàng", "customer_id")
-    group_col = choose_column("Nhóm khách hàng", "group")
+    group_col = choose_column("Loại khách hàng (dùng để lọc NPP)", "group")
     date_col = choose_column("Ngày chứng từ", "date", True)
     time_col = choose_column("Giờ lấy hàng (nếu có)", "time")
     document_col = choose_column("Số chứng từ", "document")
-    address_col = choose_column("Địa điểm (địa chỉ NPP)", "address", True)
-    warehouse_col = choose_column("Mã kho / kho xuất", "warehouse", True)
+    address_col = choose_column("Địa chỉ khách hàng / NPP", "address", True)
+    region_col = choose_column("Miền2 (phân vùng kho)", "region")
+    warehouse_col = choose_column("Mã kho thực tế", "warehouse", True)
     method_col = choose_column("Hình thức vận chuyển", "method", True)
     vehicle_col = choose_column("Biển số xe", "vehicle")
     revenue_col = choose_column("Doanh thu", "revenue")
@@ -650,6 +651,7 @@ with st.sidebar:
     item_name_col = choose_column("Tên hàng", "item_name")
     note_col = choose_column("Ghi chú", "note")
     order_type_col = choose_column("Loại giao dịch", "order_type")
+    warehouse_note_col = choose_column("Ghi chú đối chiếu kho (Ghi chú2)", "warehouse_note")
 
 required = [customer_col, date_col, address_col, warehouse_col, method_col]
 if any(x is None for x in required):
