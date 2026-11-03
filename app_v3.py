@@ -54,49 +54,61 @@ WAREHOUSE_NAMES = {
     "301": "TK Nam Cấm", "302": "TK Nam Cấm",
 }
 
-# Ma trận kho ưu tiên theo địa chỉ cụ thể do người dùng cung cấp.
+# Quy tắc địa chỉ -> nhóm khu vực -> danh sách mã kho chấp nhận.
+# Danh sách được giữ đúng theo ma trận người dùng cung cấp; không tự mở rộng kho.
 ADDRESS_WAREHOUSE_RULES = {
     "Miền Bắc": {
-        "keywords": ["hai phong", "ha noi", "hung yen", "bac ninh", "quang ninh", "ninh binh",
-            "thanh hoa", "nghe an", "ha tinh", "tuyen quang", "phu tho", "thai nguyen",
-            "lao cai", "lai chau", "son la", "dien bien", "xa nghia dan", "xa kim anh",
-            "phuong tam thanh", "phuong quyet thang", "phuong minh xuan"],
-        "warehouses": {"261", "262", "291"},
+        "keywords": [
+            "hai phong", "thanh pho hai phong", "ha noi", "thanh pho ha noi",
+            "hung yen", "bac ninh", "quang ninh", "ninh binh", "thanh hoa",
+            "nghe an", "ha tinh", "tuyen quang", "phu tho", "thai nguyen",
+            "lao cai", "lai chau", "son la", "dien bien", "xa nghia dan",
+            "xa kim anh", "phuong tam thanh", "phuong quyet thang", "phuong minh xuan"
+        ],
+        "warehouses": {"261", "291"},
     },
-    "Huế và Quảng Trị": {
+    "Miền Trung - Huế và Quảng Trị": {
         "keywords": ["hue", "thua thien hue", "quang tri"],
-        "warehouses": {"251", "253", "254", "261", "262", "263", "264"},
+        "warehouses": {"251", "261", "263"},
     },
-    "Đà Nẵng": {
-        "keywords": ["da nang"],
-        "warehouses": {"251", "253", "254", "263", "264"},
+    "Miền Trung - Đà Nẵng": {
+        "keywords": ["da nang", "thanh pho da nang"],
+        "warehouses": {"251", "263"},
     },
-    "Khánh Hòa và Quảng Ngãi": {
+    "Miền Trung - Khánh Hòa và Quảng Ngãi": {
         "keywords": ["khanh hoa", "quang ngai"],
-        "warehouses": {"251", "253", "254", "263", "264", "053", "054", "055", "284", "285"},
+        "warehouses": {"251", "263", "053", "284"},
     },
-    "Tây Nguyên và địa bàn liên quan": {
-        "keywords": ["dak lak", "daklak", "gia lai", "lam dong", "xa duc lap",
+    "Miền Trung - Tây Nguyên": {
+        "keywords": [
+            "dak lak", "daklak", "gia lai", "lam dong", "xa duc lap",
             "xa cat tien 2", "xa cat tien", "xa nam ban lam ha", "xa quang lap",
-            "xa duc trong", "phuong lam vien da lat"],
-        "warehouses": {"251", "253", "254", "252", "263", "264", "053", "054", "055", "284", "285"},
+            "xa duc trong", "phuong lam vien da lat"
+        ],
+        "warehouses": {"251", "252", "263", "053", "054", "284"},
     },
-    "Đông Nam Bộ": {
-        "keywords": ["dong nai", "ho chi minh", "tay ninh", "binh duong",
-            "ba ria vung tau", "ba ria- vung tau", "quan thu duc", "phuong thong nhat"],
-        "warehouses": {"053", "054", "055", "281", "283", "284", "285"},
+    "Miền Nam - Đông Nam Bộ": {
+        "keywords": [
+            "dong nai", "thanh pho dong nai", "ho chi minh", "thanh pho ho chi minh",
+            "tay ninh", "binh duong", "ba ria vung tau", "ba ria vung tau",
+            "quan thu duc", "phuong thong nhat"
+        ],
+        "warehouses": {"053", "054", "281", "284"},
     },
-    "Tây Nam Bộ": {
-        "keywords": ["an giang", "dong thap", "vinh long", "can tho", "ca mau"],
-        "warehouses": {"053", "054", "055", "281", "283", "284", "285"},
+    "Miền Nam - Tây Nam Bộ": {
+        "keywords": ["an giang", "dong thap", "vinh long", "can tho", "thanh pho can tho", "ca mau"],
+        "warehouses": {"053", "054", "281", "284"},
     },
 }
+# Dùng Miền2 chỉ khi địa chỉ không đủ thông tin để nhận diện tỉnh/thành.
+# Tây Nguyên được gộp vào Miền Trung - Tây Nguyên, tuyệt đối không gán Miền Bắc.
 BROAD_REGION_RULES = {
-    "Miền Bắc": {"261", "262", "291"},
-    "Miền Trung": {"251", "253", "254", "261", "262", "263", "264", "053", "054", "055", "284", "285"},
-    "Tây Nguyên": {"251", "253", "254", "252", "263", "264", "053", "054", "055", "284", "285"},
-    "Miền Nam": {"053", "054", "055", "281", "283", "284", "285"},
-    "Miền Tây": {"053", "054", "055", "281", "283", "284", "285"},
+    "Miền Bắc": {"261", "291"},
+    "Miền Trung": {"251", "261", "263", "053", "284"},
+    "Miền Trung - Tây Nguyên": {"251", "252", "263", "053", "054", "284"},
+    "Tây Nguyên": {"251", "252", "263", "053", "054", "284"},
+    "Miền Nam": {"053", "054", "281", "284"},
+    "Miền Tây": {"053", "054", "281", "284"},
 }
 SPECIAL_WAREHOUSES = {"282", "292"}
 WAREHOUSE_STATUS_OUTSIDE = "Ngoài danh sách kho hợp lý - cần xác minh"
@@ -127,7 +139,11 @@ ALIASES = {
     "region": ["Miền2", "Miền", "Vùng miền", "Khu vực"],
     "warehouse": ["Mã kho", "Mã kho xuất", "Kho xuất", "Kho lấy hàng"],
     "warehouse_region_file": ["Kho lấy hàng vùng miền", "Kho lấy hàng theo vùng miền", "Kho vùng miền", "Danh sách kho hợp lý theo vùng"],
-    "warehouse_note_file": ["Ghi chú hợp lý hoặc không hợp lý", "Ghi chú hợp lý/không hợp lý", "Ghi chú kho", "Đánh giá kho", "Nhận xét kho"],
+    "warehouse_note_file": [
+        "Ghi chú hợp lý hoặc không hợp lý", "Ghi chú hợp lý/không hợp lý",
+        "Ghi chú hợp lý hay không hợp lý", "Ghi chú kho", "Đánh giá kho",
+        "Nhận xét kho", "Kết luận kho", "Nhận định kho lấy hàng"
+    ],
     "method": ["Hình thức vận chuyển", "Phương thức vận chuyển", "Loại vận chuyển", "Shipping Method"],
     "vehicle": ["Số xe", "Biển số xe", "Biển kiểm soát"],
     "revenue": ["Thành tiền bán", "Doanh thu", "Thành tiền"],
@@ -317,7 +333,7 @@ def identify_region(region_value, address):
     if "mien bac" in r or r == "bac":
         return "Miền Bắc"
     if "tay nguyen" in r:
-        return "Tây Nguyên"
+        return "Miền Trung - Tây Nguyên"
     if "mien trung" in r or r == "trung":
         return "Miền Trung"
     if "mien tay" in r or "dbscl" in r:
@@ -544,6 +560,24 @@ df["_doi_chieu_kho_tong_hop"] = [
         df["_kho_vung_file"], df["_ghi_chu_kho_file"]
     )
 ]
+df["_kho_hop_ly_theo_dia_chi"] = [
+    ", ".join(sorted(allowed_warehouses_for_region(region)[0]))
+    if allowed_warehouses_for_region(region)[0] else ""
+    for region in df["_vung"]
+]
+df["_ly_do_doi_chieu_kho"] = [
+    (
+        f"Địa chỉ thuộc {region}; kho thực tế {code} - {warehouse_name(code)}; "
+        f"kho chấp nhận: {', '.join(sorted(allowed_warehouses_for_region(region)[0]))}."
+        if allowed_warehouses_for_region(region)[0] and code in WAREHOUSE_NAMES
+        else (
+            f"Chưa xác định được khu vực từ địa chỉ/miền; mã kho chứng từ: {code or 'trống'}."
+            if not allowed_warehouses_for_region(region)[0]
+            else f"Không trích xuất được mã kho hợp lệ từ số chứng từ: {code or 'trống'}."
+        )
+    )
+    for region, code in zip(df["_vung"], df["_ma_kho"])
+]
 df["_customer_key"] = np.where(
     df["_ma_kh"].ne(""),
     df["_ma_kh"].str.upper(),
@@ -651,6 +685,7 @@ warehouse_evidence_statuses = {
     "Theo ghi chú file: không hợp lý - cần xác minh",
     "Mâu thuẫn: thuật toán phù hợp nhưng file ghi không hợp lý",
     "Mâu thuẫn: file ghi hợp lý nhưng kho ngoài vùng địa chỉ",
+    "Không khớp danh sách kho vùng miền trong file",
 }
 warehouse_evidence = customer_vehicle[
     customer_vehicle["_doi_chieu_kho_tong_hop"].isin(warehouse_evidence_statuses)
@@ -826,7 +861,7 @@ for _, row in customer_summary.iterrows():
     reasons = []
     actions = []
     if wh_n:
-        reasons.append(f"{wh_n} dòng xe khách hàng lấy hàng ngoài danh sách kho theo vùng.")
+        reasons.append(f"{wh_n} dòng xe khách hàng có mã kho không khớp ma trận địa chỉ hoặc có mâu thuẫn với ghi chú/danh sách kho trong file.")
         actions.append("Đối chiếu phiếu xuất kho, địa chỉ NPP, vùng Miền2 và chứng từ điều chuyển/phê duyệt ngoại lệ.")
     if day_n:
         reasons.append(f"{day_n} dòng liên quan biển số được nhiều NPP sử dụng trong cùng ngày.")
@@ -988,13 +1023,16 @@ with tab_warehouse:
         st.warning(f"Có {len(warehouse_evidence):,} dòng cần xác minh khoảng cách, điều phối và lý do chọn kho.")
         st.dataframe(warehouse_evidence[[
             "_ten_kh", "_dia_chi", "_mien_goc", "_vung", "_chung_tu", "_ma_kho", "_ten_kho",
-            "_doi_chieu_kho", "_doi_chieu_kho_tong_hop", "_kho_vung_file",
-            "_ghi_chu_kho_file", "_ngay", "_bien_so_goc"
+            "_doi_chieu_kho", "_doi_chieu_kho_tong_hop", "_kho_hop_ly_theo_dia_chi",
+            "_ly_do_doi_chieu_kho", "_kho_vung_file", "_ghi_chu_kho_file", "_ngay", "_bien_so_goc"
         ]].rename(columns={
             "_ten_kh": "NPP", "_dia_chi": "Địa chỉ", "_mien_goc": "Miền2 gốc",
             "_vung": "Vùng/nhóm địa chỉ", "_ma_kho": "Mã kho từ 3 số đầu chứng từ",
             "_ten_kho": "Tên kho theo danh mục", "_doi_chieu_kho": "Đối chiếu theo địa chỉ",
-            "_doi_chieu_kho_tong_hop": "Kết quả tổng hợp", "_kho_vung_file": "Kho vùng miền ghi trong file",
+            "_doi_chieu_kho_tong_hop": "Kết quả tổng hợp",
+            "_kho_hop_ly_theo_dia_chi": "Kho được chấp nhận theo địa chỉ",
+            "_ly_do_doi_chieu_kho": "Lý do đánh giá",
+            "_kho_vung_file": "Kho vùng miền ghi trong file",
             "_ghi_chu_kho_file": "Ghi chú gốc trong file", "_ngay": "Ngày",
             "_chung_tu": "Chứng từ", "_bien_so_goc": "Số xe gốc"
         }), use_container_width=True, hide_index=True)
