@@ -88,7 +88,7 @@ ADDRESS_WAREHOUSE_RULES = {
     },
     "Tây Nam Bộ": {
         "keywords": ["an giang", "dong thap", "vinh long", "can tho", "ca mau"],
-        "warehouses": {"053", "054", "281", "284"},
+        "warehouses": {"053", "054", "055", "281", "283", "284", "285"},
     },
 }
 BROAD_REGION_RULES = {
