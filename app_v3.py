@@ -505,7 +505,12 @@ def build_vehicle_tables(car):
 
     period = period.merge(shared_days, on="_plate", how="left")
     period["So_ngay_dung_chung"] = period["So_ngay_dung_chung"].fillna(0)
-    period = period[period["So_NPP"] >= 2].sort_values(
+    # Tab "nhiều ngày" chỉ giữ biển số được nhiều NPP cùng sử dụng
+    # ở ít nhất hai ngày khác nhau; một ngày đã được báo ở tab cùng ngày.
+    period = period[
+        (period["So_NPP"] >= 2) &
+        (period["So_ngay_dung_chung"] >= 2)
+    ].sort_values(
         ["So_NPP", "So_ngay_dung_chung"], ascending=False
     )
 
