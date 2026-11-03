@@ -144,14 +144,14 @@ def clean_wh(value):
     if not text:
         return ""
     # Numeric Excel codes: 53 and 53.0 become 053.
-    if re.fullmatch(r"\\d+(?:\\.0+)?", text):
+    if re.fullmatch(r"\d+(?:\.0+)?", text):
         return str(int(float(text))).zfill(3)
     # Preserve alphanumeric warehouse codes such as 05A, 26K and 25A.
     token = re.sub(r"[^A-Z0-9]", "", text)
     if re.fullmatch(r"[A-Z0-9]{2,4}", token):
         return token
     # Also support labels such as "Kho 053".
-    match = re.search(r"(?<![A-Z0-9])(\\d{1,3})(?![A-Z0-9])", text)
+    match = re.search(r"(?<![A-Z0-9])(\d{1,3})(?![A-Z0-9])", text)
     return match.group(1).zfill(3) if match else ""
 
 
@@ -161,7 +161,7 @@ def valid_vietnam_plate(value):
         return False
     # Examples: 35H00916, 50E60617, 86B372688.
     # Reject placeholders such as GK/Gửi kho and numeric-only IDs.
-    return bool(re.fullmatch(r"\\d{2}[A-Z]{1,2}\\d{4,6}", plate))
+    return bool(re.fullmatch(r"\d{2}[A-Z]{1,2}\d{4,6}", plate))
 
 
 def parse_num(value):
