@@ -314,26 +314,114 @@ def classify_transport(value):
 
 
 def identify_region(region_value, address):
-    """Ưu tiên nhóm địa chỉ cụ thể; dùng Miền2 làm dự phòng."""
-    a = norm(address)
-    matches = []
-    for group, rule in ADDRESS_WAREHOUSE_RULES.items():
-        for keyword in rule["keywords"]:
-            key = norm(keyword)
-            # Match whole phrase boundaries; tránh "Huế" bị nhận nhầm
-            # bên trong từ "huyện".
-            pattern = r"(?<![a-z0-9])" + re.escape(key) + r"(?![a-z0-9])"
-            if key and re.search(pattern, a):
-                matches.append((len(key), group))
-    if matches:
-        matches.sort(reverse=True)
-        return matches[0][1]
+    """
+    Xác định vùng theo TỈNH/THÀNH PHỐ ghi trong địa chỉ trước.
+    Chỉ dùng Miền2 gốc làm dự phòng khi địa chỉ không có tỉnh/thành nhận diện được.
 
+    Lý do: tên xã/phường có thể trùng tên tỉnh cũ hoặc tỉnh khác
+    (ví dụ Xã Tuyên Quang thuộc Tỉnh Lâm Đồng). Không được dò chuỗi
+    toàn địa chỉ rồi chọn từ khóa dài nhất vì sẽ gán nhầm địa bàn.
+    """
+    raw_address = clean(address)
+    address_norm = norm(raw_address)
+
+    # Tỉnh/thành phố là cấp địa giới có độ tin cậy cao nhất trong địa chỉ.
+    # Tách theo dấu phẩy để không nhầm tên xã/phường với tên tỉnh.
+    province_region = {
+        "ha noi": "Miền Bắc",
+        "hai phong": "Miền Bắc",
+        "hung yen": "Miền Bắc",
+        "bac ninh": "Miền Bắc",
+        "quang ninh": "Miền Bắc",
+        "ninh binh": "Miền Bắc",
+        "thanh hoa": "Miền Bắc",
+        "nghe an": "Miền Bắc",
+        "ha tinh": "Miền Bắc",
+        "tuyen quang": "Miền Bắc",
+        "phu tho": "Miền Bắc",
+        "thai nguyen": "Miền Bắc",
+        "lao cai": "Miền Bắc",
+        "lai chau": "Miền Bắc",
+        "son la": "Miền Bắc",
+        "dien bien": "Miền Bắc",
+
+        "hue": "Miền Trung - Huế và Quảng Trị",
+        "thua thien hue": "Miền Trung - Huế và Quảng Trị",
+        "quang tri": "Miền Trung - Huế và Quảng Trị",
+        "da nang": "Miền Trung - Đà Nẵng",
+        "khanh hoa": "Miền Trung - Khánh Hòa và Quảng Ngãi",
+        "quang ngai": "Miền Trung - Khánh Hòa và Quảng Ngãi",
+        "dak lak": "Miền Trung - Tây Nguyên",
+        "daklak": "Miền Trung - Tây Nguyên",
+        "gia lai": "Miền Trung - Tây Nguyên",
+        "lam dong": "Miền Trung - Tây Nguyên",
+
+        "dong nai": "Miền Nam - Đông Nam Bộ",
+        "ho chi minh": "Miền Nam - Đông Nam Bộ",
+        "tay ninh": "Miền Nam - Đông Nam Bộ",
+        "binh duong": "Miền Nam - Đông Nam Bộ",
+        "ba ria vung tau": "Miền Nam - Đông Nam Bộ",
+
+        "an giang": "Miền Nam - Tây Nam Bộ",
+        "dong thap": "Miền Nam - Tây Nam Bộ",
+        "vinh long": "Miền Nam - Tây Nam Bộ",
+        "can tho": "Miền Nam - Tây Nam Bộ",
+        "ca mau": "Miền Nam - Tây Nam Bộ",
+    }
+
+    province_segments = []
+    for segment in re.split(r"[,;|]", raw_address):
+        seg = norm(segment).strip()
+        if seg.startswith("tinh "):
+            province_segments.append(seg[len("tinh "):].strip())
+        elif seg.startswith("thanh pho "):
+            province_segments.append(seg[len("thanh pho "):].strip())
+
+    # Ưu tiên tỉnh/thành được ghi rõ; kiểm tra từ cuối địa chỉ về đầu
+    # để ưu tiên phần địa giới hành chính chính thức gần cuối địa chỉ.
+    for province in reversed(province_segments):
+        if province in province_region:
+            return province_region[province]
+
+    # Dự phòng cho địa chỉ không ghi tiền tố "Tỉnh/Thành phố".
+    # Chỉ dò từng thành phần địa chỉ, không dò chuỗi toàn địa chỉ.
+    address_keywords = {
+        "Miền Bắc": [
+            "hai phong", "ha noi", "hung yen", "bac ninh", "quang ninh",
+            "ninh binh", "thanh hoa", "nghe an", "ha tinh", "phu tho",
+            "thai nguyen", "lao cai", "lai chau", "son la", "dien bien",
+            "xa nghia dan", "xa kim anh", "phuong tam thanh",
+            "phuong quyet thang", "phuong minh xuan"
+        ],
+        "Miền Trung - Huế và Quảng Trị": ["hue", "thua thien hue", "quang tri"],
+        "Miền Trung - Đà Nẵng": ["da nang"],
+        "Miền Trung - Khánh Hòa và Quảng Ngãi": ["khanh hoa", "quang ngai"],
+        "Miền Trung - Tây Nguyên": [
+            "dak lak", "daklak", "gia lai", "lam dong", "xa duc lap",
+            "xa cat tien 2", "xa cat tien", "xa nam ban lam ha",
+            "xa quang lap", "xa duc trong", "phuong lam vien da lat"
+        ],
+        "Miền Nam - Đông Nam Bộ": [
+            "dong nai", "ho chi minh", "tay ninh", "binh duong",
+            "ba ria vung tau", "quan thu duc", "phuong thong nhat"
+        ],
+        "Miền Nam - Tây Nam Bộ": ["an giang", "dong thap", "vinh long", "can tho", "ca mau"],
+    }
+    address_parts = [norm(x).strip() for x in re.split(r"[,;|]", raw_address) if norm(x).strip()]
+    for group, keywords in address_keywords.items():
+        for part in address_parts:
+            for keyword in keywords:
+                key = norm(keyword)
+                if part == key or part.endswith(" " + key) or part.startswith(key + " "):
+                    return group
+
+    # Không suy đoán từ tên xã/phường nếu tỉnh/thành đã không nhận diện được.
+    # Dùng Miền2 gốc làm dự phòng và chuẩn hóa Tây Nguyên về Miền Trung - Tây Nguyên.
     r = norm(region_value)
-    if "mien bac" in r or r == "bac":
-        return "Miền Bắc"
     if "tay nguyen" in r:
         return "Miền Trung - Tây Nguyên"
+    if "mien bac" in r or r == "bac":
+        return "Miền Bắc"
     if "mien trung" in r or r == "trung":
         return "Miền Trung"
     if "mien tay" in r or "dbscl" in r:
@@ -341,7 +429,6 @@ def identify_region(region_value, address):
     if "mien nam" in r or "dong nam bo" in r or r == "nam":
         return "Miền Nam"
     return "Chưa xác định vùng"
-
 
 def extract_warehouse_code(document_number):
     """Lấy 3 chữ số đầu Số chứng từ: 263.18067094 -> 263."""
