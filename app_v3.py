@@ -126,7 +126,9 @@ ALIASES = {
     "address": ["Địa chỉ", "Địa chỉ khách hàng", "Địa chỉ KH", "Địa điểm"],
     "region": ["Miền2", "Miền", "Vùng miền", "Khu vực"],
     "warehouse": ["Mã kho", "Mã kho xuất", "Kho xuất", "Kho lấy hàng"],
-    "method": ["Hình thức vận chuyển", "Phương thức vận chuyển", "Loại vận chuyển"],
+    "warehouse_region_file": ["Kho lấy hàng vùng miền", "Kho lấy hàng theo vùng miền", "Kho vùng miền", "Danh sách kho hợp lý theo vùng"],
+    "warehouse_note_file": ["Ghi chú hợp lý hoặc không hợp lý", "Ghi chú hợp lý/không hợp lý", "Ghi chú kho", "Đánh giá kho", "Nhận xét kho"],
+    "method": ["Hình thức vận chuyển", "Phương thức vận chuyển", "Loại vận chuyển", "Shipping Method"],
     "vehicle": ["Số xe", "Biển số xe", "Biển kiểm soát"],
     "revenue": ["Thành tiền bán", "Doanh thu", "Thành tiền"],
     "quantity": ["Số lượng", "SL"],
@@ -359,6 +361,40 @@ def warehouse_check(region, warehouse):
     return WAREHOUSE_STATUS_OUTSIDE
 
 
+def extract_warehouse_codes(value):
+    """Trích mã kho 3 chữ số từ cột kho lấy hàng vùng miền trong workbook."""
+    return set(re.findall(r"(?<!\\d)(\\d{3})(?!\\d)", clean(value)))
+
+
+def classify_workbook_note(value):
+    """Ghi chú gốc là nguồn tham khảo bổ sung, không thay thế kiểm tra theo địa chỉ."""
+    text = norm(value)
+    if not text:
+        return "Không có ghi chú trong file"
+    if any(x in text for x in ["khong hop ly", "khong hop le", "khong phu hop", "bat hop ly", "sai kho"]):
+        return "File ghi chú: không hợp lý"
+    if any(x in text for x in ["hop ly", "phu hop", "dung kho"]):
+        return "File ghi chú: hợp lý"
+    return "Ghi chú khác - cần đọc nội dung"
+
+
+def combine_warehouse_review(base_status, warehouse, file_region_text, file_note):
+    """Đối chiếu độc lập theo địa chỉ, danh sách kho vùng miền và ghi chú có sẵn."""
+    listed_codes = extract_warehouse_codes(file_region_text)
+    note_status = classify_workbook_note(file_note)
+    if warehouse in SPECIAL_WAREHOUSES:
+        return WAREHOUSE_STATUS_SPECIAL
+    if listed_codes and warehouse and warehouse not in listed_codes:
+        return "Không khớp danh sách kho vùng miền trong file"
+    if note_status == "File ghi chú: không hợp lý":
+        if base_status in {"Phù hợp địa chỉ/khu vực", WAREHOUSE_STATUS_FALLBACK}:
+            return "Mâu thuẫn: thuật toán phù hợp nhưng file ghi không hợp lý"
+        return "Theo ghi chú file: không hợp lý - cần xác minh"
+    if note_status == "File ghi chú: hợp lý" and base_status == WAREHOUSE_STATUS_OUTSIDE:
+        return "Mâu thuẫn: file ghi hợp lý nhưng kho ngoài vùng địa chỉ"
+    return base_status
+
+
 def money_fmt(value):
     return f"{value:,.0f}"
 
@@ -482,6 +518,9 @@ df["_dia_chi"] = get_col("address").map(clean)
 df["_mien_goc"] = get_col("region").map(clean)
 df["_ma_kho"] = get_col("document").map(extract_warehouse_code)
 df["_ten_kho"] = df["_ma_kho"].map(warehouse_name)
+df["_kho_vung_file"] = get_col("warehouse_region_file").map(clean)
+df["_ghi_chu_kho_file"] = get_col("warehouse_note_file").map(clean)
+df["_ghi_chu_kho_chuan_hoa"] = df["_ghi_chu_kho_file"].map(classify_workbook_note)
 df["_hinh_thuc_goc"] = get_col("method").map(clean)
 df["_loai_xe"] = df["_hinh_thuc_goc"].map(classify_transport)
 df["_bien_so_goc"] = get_col("vehicle").map(clean)
@@ -497,6 +536,13 @@ df["_vung"] = [
 ]
 df["_doi_chieu_kho"] = [
     warehouse_check(r, w) for r, w in zip(df["_vung"], df["_ma_kho"])
+]
+df["_doi_chieu_kho_tong_hop"] = [
+    combine_warehouse_review(base, code, file_region, file_note)
+    for base, code, file_region, file_note in zip(
+        df["_doi_chieu_kho"], df["_ma_kho"],
+        df["_kho_vung_file"], df["_ghi_chu_kho_file"]
+    )
 ]
 df["_customer_key"] = np.where(
     df["_ma_kh"].ne(""),
@@ -599,23 +645,29 @@ customer_summary = (
 
 # Warehouse: evaluate customer-owned vehicle transactions only.
 customer_vehicle = filtered[filtered["_loai_xe"] == "Xe khách hàng"].copy()
+warehouse_evidence_statuses = {
+    WAREHOUSE_STATUS_OUTSIDE,
+    "Không khớp danh sách kho vùng miền trong file",
+    "Theo ghi chú file: không hợp lý - cần xác minh",
+    "Mâu thuẫn: thuật toán phù hợp nhưng file ghi không hợp lý",
+    "Mâu thuẫn: file ghi hợp lý nhưng kho ngoài vùng địa chỉ",
+}
 warehouse_evidence = customer_vehicle[
-    customer_vehicle["_doi_chieu_kho"] == WAREHOUSE_STATUS_OUTSIDE
+    customer_vehicle["_doi_chieu_kho_tong_hop"].isin(warehouse_evidence_statuses)
 ].copy()
 warehouse_special = customer_vehicle[
-    customer_vehicle["_doi_chieu_kho"] == WAREHOUSE_STATUS_SPECIAL
+    customer_vehicle["_doi_chieu_kho_tong_hop"] == WAREHOUSE_STATUS_SPECIAL
 ].copy()
 warehouse_unknown = customer_vehicle[
-    customer_vehicle["_doi_chieu_kho"].isin([
+    customer_vehicle["_doi_chieu_kho_tong_hop"].isin([
         "Không trích xuất được mã kho từ số chứng từ",
         "Mã kho chưa có trong danh mục",
         "Chưa đủ dữ liệu địa chỉ/vùng",
         "Chưa xác định vùng",
-        WAREHOUSE_STATUS_FALLBACK
     ])
 ].copy()
 warehouse_counts = (
-    customer_vehicle.groupby("_doi_chieu_kho")
+    customer_vehicle.groupby("_doi_chieu_kho_tong_hop")
     .size().reset_index(name="Số dòng")
     .sort_values("Số dòng", ascending=False)
 )
@@ -708,8 +760,9 @@ for label, mask, reason in [
     ("Thiếu địa chỉ", filtered["_dia_chi"].eq(""), "Thiếu địa chỉ NPP"),
     ("Chưa xác định vùng", filtered["_vung"].eq("Chưa xác định vùng"), "Không xác định được vùng từ Miền2/địa chỉ"),
     ("Không trích xuất được mã kho", filtered["_ma_kho"].eq(""), "Không lấy được 3 số đầu từ Số chứng từ"),
-    ("Mã kho chưa có trong danh mục", filtered["_ma_kho"].ne("") & ~filtered["_ma_kho"].isin(WAREHOUSE_NAMES), "Mã kho trích từ chứng từ chưa có trong danh mục 20 mã kho"),
-    ("Thiếu mã kho", filtered["_ma_kho"].eq(""), "Thiếu mã kho"),
+    ("Mã kho chưa có trong danh mục", filtered["_ma_kho"].ne("") & ~filtered["_ma_kho"].isin(WAREHOUSE_NAMES), "Mã kho trích từ chứng từ chưa có trong danh mục mã kho"),
+    ("Thiếu danh sách kho vùng miền trong file", filtered["_kho_vung_file"].eq(""), "Không có danh sách kho vùng miền ở dòng dữ liệu này"),
+    ("Thiếu ghi chú đánh giá kho trong file", filtered["_ghi_chu_kho_file"].eq(""), "Không có ghi chú hợp lý/không hợp lý ở dòng dữ liệu này"),
     ("Chưa xác định hình thức vận chuyển", filtered["_loai_xe"].eq("Chưa xác định"), "Không phân loại được hình thức vận chuyển"),
     ("Thiếu/không chuẩn biển số", (filtered["_loai_xe"] == "Xe khách hàng") & (~filtered["_bien_so_hop_le"]), "Xe khách hàng thiếu hoặc biển số không đạt định dạng sàng lọc"),
 ]:
@@ -935,11 +988,14 @@ with tab_warehouse:
         st.warning(f"Có {len(warehouse_evidence):,} dòng cần xác minh khoảng cách, điều phối và lý do chọn kho.")
         st.dataframe(warehouse_evidence[[
             "_ten_kh", "_dia_chi", "_mien_goc", "_vung", "_chung_tu", "_ma_kho", "_ten_kho",
-            "_doi_chieu_kho", "_ngay", "_bien_so_goc"
+            "_doi_chieu_kho", "_doi_chieu_kho_tong_hop", "_kho_vung_file",
+            "_ghi_chu_kho_file", "_ngay", "_bien_so_goc"
         ]].rename(columns={
             "_ten_kh": "NPP", "_dia_chi": "Địa chỉ", "_mien_goc": "Miền2 gốc",
-            "_vung": "Vùng chuẩn hóa", "_ma_kho": "Mã kho trích từ chứng từ",
-            "_ten_kho": "Tên kho theo danh mục", "_doi_chieu_kho": "Kết quả đối chiếu", "_ngay": "Ngày",
+            "_vung": "Vùng/nhóm địa chỉ", "_ma_kho": "Mã kho từ 3 số đầu chứng từ",
+            "_ten_kho": "Tên kho theo danh mục", "_doi_chieu_kho": "Đối chiếu theo địa chỉ",
+            "_doi_chieu_kho_tong_hop": "Kết quả tổng hợp", "_kho_vung_file": "Kho vùng miền ghi trong file",
+            "_ghi_chu_kho_file": "Ghi chú gốc trong file", "_ngay": "Ngày",
             "_chung_tu": "Chứng từ", "_bien_so_goc": "Số xe gốc"
         }), use_container_width=True, hide_index=True)
     st.markdown("### Kho hàng gửi tại HS Home của HSN Phú Mỹ")
@@ -949,11 +1005,15 @@ with tab_warehouse:
         st.warning("Không xếp 282/292 vào nhóm phù hợp vùng thông thường. Cần kiểm tra vị trí lưu hàng, phiếu nhập/xuất và đơn vị quản lý kho.")
         st.dataframe(warehouse_special[[
             "_ten_kh", "_dia_chi", "_vung", "_chung_tu", "_ma_kho", "_ten_kho",
-            "_doi_chieu_kho", "_ngay", "_bien_so_goc"
+            "_doi_chieu_kho", "_doi_chieu_kho_tong_hop", "_kho_vung_file",
+            "_ghi_chu_kho_file", "_ngay", "_bien_so_goc"
         ]].rename(columns={
             "_ten_kh": "NPP", "_dia_chi": "Địa chỉ", "_vung": "Vùng",
             "_chung_tu": "Chứng từ", "_ma_kho": "Mã kho",
-            "_ten_kho": "Tên kho", "_doi_chieu_kho": "Kết quả",
+            "_ten_kho": "Tên kho", "_doi_chieu_kho": "Đối chiếu theo địa chỉ",
+            "_doi_chieu_kho_tong_hop": "Kết quả tổng hợp",
+            "_kho_vung_file": "Kho vùng miền ghi trong file",
+            "_ghi_chu_kho_file": "Ghi chú gốc trong file",
             "_ngay": "Ngày", "_bien_so_goc": "Biển số xe"
         }), use_container_width=True, hide_index=True)
 
@@ -962,16 +1022,18 @@ with tab_warehouse:
         st.success("Không có giao dịch kho thiếu thông tin.")
     else:
         st.dataframe(warehouse_unknown[[
-            "_ten_kh", "_dia_chi", "_mien_goc", "_vung", "_chung_tu", "_ma_kho", "_ten_kho",
-            "_doi_chieu_kho", "_ngay"
+            "_ten_kh", "_dia_chi", "_mien_goc", "_vung", "_chung_tu",
+            "_ma_kho", "_ten_kho", "_doi_chieu_kho", "_doi_chieu_kho_tong_hop",
+            "_kho_vung_file", "_ghi_chu_kho_file", "_ngay"
         ]], use_container_width=True, hide_index=True)
     st.markdown("### Cách xử lý đề xuất")
     st.write(
         "1. Xác minh địa chỉ NPP và vùng địa lý thực tế. "
-        "2. Đối chiếu mã kho trích từ 3 số đầu chứng từ với tên kho trong danh mục và vùng địa chỉ NPP. "
-        "3. Với mã kho ngoài vùng ưu tiên, kiểm tra khoảng cách thực tế, tuyến đường, năng lực kho, tồn kho và lý do điều phối. "
-        "4. Với mã 282/292 (hàng gửi HS Home), kiểm tra riêng địa điểm lưu hàng, phiếu nhập/xuất và đơn vị quản lý. "
-        "5. Chỉ kết luận bất thường sau khi đối chiếu hồ sơ, giải trình và phê duyệt ngoại lệ."
+        "2. Lấy 3 số đầu của Số chứng từ (ví dụ 263.18067094 -> 263), rồi tra tên kho trong danh mục. "
+        "3. So sánh mã kho với ma trận địa chỉ cụ thể; nếu ngoài danh sách, kiểm tra tuyến đường, khoảng cách, tồn kho và lý do điều phối. "
+        "4. Đối chiếu thêm cột Kho lấy hàng vùng miền và Ghi chú hợp lý/không hợp lý trong workbook. Nếu ghi chú trái với kết quả theo địa chỉ, đưa vào nhóm mâu thuẫn để xác minh, không tự động tin một nguồn. "
+        "5. Mã 282/292 là kho hàng gửi HS Home, cần kiểm tra riêng địa điểm lưu hàng, phiếu nhập/xuất và đơn vị quản lý. "
+        "6. Chỉ kết luận bất thường sau khi đối chiếu hồ sơ, giải trình và phê duyệt ngoại lệ."
     )
 
 with tab_vehicle:
@@ -1102,7 +1164,7 @@ export_sheets = {
     "Tong_hop_rui_ro": risk_summary,
     "Doanh_thu_mat_hang": product_summary,
     "Theo_thang": monthly_sales,
-    "Kho_ngoai_vung_uu_tien": warehouse_evidence,
+    "Kho_can_xac_minh": warehouse_evidence,
     "Kho_HS_Home_can_xac_minh": warehouse_special,
     "Kho_chua_du_du_lieu": warehouse_unknown,
     "Xe_cung_ngay": vehicle_day_shared,
