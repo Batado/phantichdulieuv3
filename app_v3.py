@@ -45,62 +45,64 @@ div[data-testid="stMetric"] {background:#101f31;padding:12px;border-radius:10px;
 
 # Mã kho được trích từ 3 chữ số đầu của Số chứng từ, ví dụ 263.18067094 -> 263.
 WAREHOUSE_NAMES = {
-    "053": "Nhựa Phú Mỹ",
-    "054": "Nhựa Phú Mỹ",
-    "055": "Nhựa Phú Mỹ",
-    "251": "Nhựa BĐ",
-    "252": "TK Đaklak",
-    "253": "Nhựa BĐ",
-    "254": "Nhựa BĐ",
-    "261": "Nhựa HN",
-    "262": "Nhựa HN",
-    "263": "TK ĐN",
-    "264": "TK ĐN",
-    "281": "TK CT",
-    "282": "Kho hàng gửi tại HS Home của HSN Phú Mỹ",
-    "283": "TK CT",
-    "284": "TK PT",
-    "285": "TK PT",
-    "291": "TK YB",
+    "053": "Nhựa Phú Mỹ", "054": "Nhựa Phú Mỹ", "055": "Nhựa Phú Mỹ",
+    "251": "Nhựa BĐ", "252": "TK Đaklak", "253": "Nhựa BĐ", "254": "Nhựa BĐ",
+    "261": "Nhựa HN", "262": "Nhựa HN", "263": "TK ĐN", "264": "TK ĐN",
+    "281": "TK CT", "282": "Kho hàng gửi tại HS Home của HSN Phú Mỹ",
+    "283": "TK CT", "284": "TK PT", "285": "TK PT", "291": "TK YB",
     "292": "Kho hàng gửi tại HS Home của HSN Phú Mỹ",
-    "301": "TK Nam Cấm",
-    "302": "TK Nam Cấm",
+    "301": "TK Nam Cấm", "302": "TK Nam Cấm",
 }
 
-# Quy tắc sàng lọc theo vị trí kho và vùng địa lý.
-# Đây là ma trận ưu tiên sơ bộ để phát hiện giao dịch cần xác minh,
-# không thay thế định tuyến thực tế, cước vận chuyển hoặc phê duyệt điều phối.
-WAREHOUSE_RULES = {
-    "Miền Nam và Tây Nam Bộ": {"053", "054", "055", "281", "283", "284", "285"},
-    "Miền Trung và Tây Nguyên": {"251", "252", "253", "254", "263", "264", "284", "285", "301", "302"},
-    "Miền Bắc": {"261", "262", "291"},
+# Ma trận kho ưu tiên theo địa chỉ cụ thể do người dùng cung cấp.
+ADDRESS_WAREHOUSE_RULES = {
+    "Miền Bắc": {
+        "keywords": ["hai phong", "ha noi", "hung yen", "bac ninh", "quang ninh", "ninh binh",
+            "thanh hoa", "nghe an", "ha tinh", "tuyen quang", "phu tho", "thai nguyen",
+            "lao cai", "lai chau", "son la", "dien bien", "xa nghia dan", "xa kim anh",
+            "phuong tam thanh", "phuong quyet thang", "phuong minh xuan"],
+        "warehouses": {"261", "291"},
+    },
+    "Huế và Quảng Trị": {
+        "keywords": ["hue", "thua thien hue", "quang tri"],
+        "warehouses": {"251", "261", "263"},
+    },
+    "Đà Nẵng": {
+        "keywords": ["da nang"],
+        "warehouses": {"251", "263"},
+    },
+    "Khánh Hòa và Quảng Ngãi": {
+        "keywords": ["khanh hoa", "quang ngai"],
+        "warehouses": {"251", "263", "053", "284"},
+    },
+    "Tây Nguyên và địa bàn liên quan": {
+        "keywords": ["dak lak", "daklak", "gia lai", "lam dong", "xa duc lap",
+            "xa cat tien 2", "xa cat tien", "xa nam ban lam ha", "xa quang lap",
+            "xa duc trong", "phuong lam vien da lat"],
+        "warehouses": {"251", "252", "263", "053", "054", "284"},
+    },
+    "Đông Nam Bộ": {
+        "keywords": ["dong nai", "ho chi minh", "tay ninh", "binh duong",
+            "ba ria vung tau", "ba ria- vung tau", "quan thu duc", "phuong thong nhat"],
+        "warehouses": {"053", "054", "281", "284"},
+    },
+    "Tây Nam Bộ": {
+        "keywords": ["an giang", "dong thap", "vinh long", "can tho", "ca mau"],
+        "warehouses": {"053", "054", "281", "284"},
+    },
+}
+BROAD_REGION_RULES = {
+    "Miền Bắc": {"261", "291"},
+    "Miền Trung": {"251", "261", "263", "053", "054", "284"},
+    "Tây Nguyên": {"251", "252", "263", "053", "054", "284"},
+    "Miền Nam": {"053", "054", "281", "284"},
+    "Miền Tây": {"053", "054", "281", "284"},
 }
 SPECIAL_WAREHOUSES = {"282", "292"}
-WAREHOUSE_STATUS_OUTSIDE = "Ngoài vùng ưu tiên - cần xác minh"
+WAREHOUSE_STATUS_OUTSIDE = "Ngoài danh sách kho hợp lý - cần xác minh"
 WAREHOUSE_STATUS_SPECIAL = "Kho hàng gửi HS Home - cần xác minh riêng"
+WAREHOUSE_STATUS_FALLBACK = "Phù hợp theo miền tổng quát - cần xác minh địa chỉ"
 
-REGION_WORDS = {
-    "Miền Nam và Tây Nam Bộ": [
-        "ho chi minh", "tp hcm", "tphcm", "sai gon", "binh duong",
-        "ba ria", "vung tau", "dong nai", "binh phuoc", "tay ninh",
-        "long an", "tien giang", "ben tre", "tra vinh", "vinh long",
-        "dong thap", "an giang", "kien giang", "can tho", "hau giang",
-        "soc trang", "bac lieu", "ca mau"
-    ],
-    "Miền Trung và Tây Nguyên": [
-        "thanh hoa", "nghe an", "ha tinh", "quang binh", "quang tri",
-        "thua thien hue", "hue", "da nang", "quang nam", "quang ngai",
-        "kon tum", "binh dinh", "gia lai", "phu yen", "dak lak",
-        "dak nong", "khanh hoa", "ninh thuan", "binh thuan", "lam dong"
-    ],
-    "Miền Bắc": [
-        "ha noi", "cao bang", "tuyen quang", "ha giang", "dien bien",
-        "lai chau", "son la", "lao cai", "yen bai", "thai nguyen",
-        "bac kan", "lang son", "quang ninh", "bac ninh", "bac giang",
-        "phu tho", "vinh phuc", "hoa binh", "hai phong", "hai duong",
-        "hung yen", "thai binh", "ninh binh", "ha nam", "nam dinh"
-    ],
-}
 NPP_TYPES = {
     "nha phan phoi ong nhua",
     "nha phan phoi nhua kd ton thep",
@@ -294,29 +296,49 @@ def classify_transport(value):
 
 
 def identify_region(region_value, address):
+    """Ưu tiên nhóm địa chỉ cụ thể; dùng Miền2 làm dự phòng."""
+    a = norm(address)
+    matches = []
+    for group, rule in ADDRESS_WAREHOUSE_RULES.items():
+        for keyword in rule["keywords"]:
+            key = norm(keyword)
+            if key and key in a:
+                matches.append((len(key), group))
+    if matches:
+        matches.sort(reverse=True)
+        return matches[0][1]
+
     r = norm(region_value)
     if "mien bac" in r or r == "bac":
         return "Miền Bắc"
-    if "mien trung" in r or "tay nguyen" in r or r == "trung":
-        return "Miền Trung và Tây Nguyên"
-    if "mien nam" in r or "mien tay" in r or "dong nam bo" in r or "dbscl" in r:
-        return "Miền Nam và Tây Nam Bộ"
-    a = norm(address)
-    for region, words in REGION_WORDS.items():
-        if any(norm(word) in a for word in words):
-            return region
+    if "tay nguyen" in r:
+        return "Tây Nguyên"
+    if "mien trung" in r or r == "trung":
+        return "Miền Trung"
+    if "mien tay" in r or "dbscl" in r:
+        return "Miền Tây"
+    if "mien nam" in r or "dong nam bo" in r or r == "nam":
+        return "Miền Nam"
     return "Chưa xác định vùng"
 
 
 def extract_warehouse_code(document_number):
-    """Lấy 3 chữ số đầu của Số chứng từ: 263.18067094 -> 263."""
+    """Lấy 3 chữ số đầu Số chứng từ: 263.18067094 -> 263."""
     text = clean(document_number).strip()
-    match = re.match(r"^(\d{3})(?:[./-]|\s|$)", text)
+    match = re.match(r"^(\d{3})(?=\.|/|-|\s|$)", text)
     return match.group(1) if match else ""
 
 
 def warehouse_name(code):
     return WAREHOUSE_NAMES.get(code, "Mã kho chưa có trong danh mục")
+
+
+def allowed_warehouses_for_region(region):
+    if region in ADDRESS_WAREHOUSE_RULES:
+        return ADDRESS_WAREHOUSE_RULES[region]["warehouses"], "Địa chỉ cụ thể"
+    if region in BROAD_REGION_RULES:
+        return BROAD_REGION_RULES[region], "Miền2 dự phòng"
+    return set(), "Chưa xác định"
 
 
 def warehouse_check(region, warehouse):
@@ -326,10 +348,11 @@ def warehouse_check(region, warehouse):
         return "Mã kho chưa có trong danh mục"
     if warehouse in SPECIAL_WAREHOUSES:
         return WAREHOUSE_STATUS_SPECIAL
-    if region not in WAREHOUSE_RULES:
+    allowed, basis = allowed_warehouses_for_region(region)
+    if not allowed:
         return "Chưa đủ dữ liệu địa chỉ/vùng"
-    if warehouse in WAREHOUSE_RULES[region]:
-        return "Phù hợp vùng ưu tiên"
+    if warehouse in allowed:
+        return WAREHOUSE_STATUS_FALLBACK if basis == "Miền2 dự phòng" else "Phù hợp địa chỉ/khu vực"
     return WAREHOUSE_STATUS_OUTSIDE
 
 
