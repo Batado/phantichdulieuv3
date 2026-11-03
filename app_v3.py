@@ -748,7 +748,7 @@ for _, row in customer_summary.iterrows():
     has_critical_fields = (
         mapped["customer_type"] is not None
         and mapped["address"] is not None
-        and mapped["warehouse"] is not None
+        and mapped["document"] is not None
         and mapped["method"] is not None
         and mapped["date"] is not None
     )
@@ -852,11 +852,12 @@ with tab_overview:
         {"Mã kho": code, "Tên kho": name}
         for code, name in WAREHOUSE_NAMES.items()
     ]), use_container_width=True, hide_index=True)
-    st.markdown("### Quy tắc kho phù hợp theo vùng")
+    st.markdown("### Quy tắc kho hợp lý theo địa chỉ")
     st.dataframe(pd.DataFrame([
-        {"Vùng": region, "Mã kho được chấp nhận": ", ".join(sorted(codes))}
-        for region, codes in WAREHOUSE_RULES.items()
+        {"Nhóm địa chỉ": region, "Mã kho được chấp nhận": ", ".join(sorted(rule["warehouses"]))}
+        for region, rule in ADDRESS_WAREHOUSE_RULES.items()
     ]), use_container_width=True, hide_index=True)
+    st.caption("Nếu không khớp địa chỉ cụ thể, hệ thống mới dùng cột Miền2 làm quy tắc dự phòng và đánh dấu cần xác minh địa chỉ.")
 
 with tab_sales:
     st.markdown('<div class="section-title">PHÂN TÍCH DOANH THU VÀ MẶT HÀNG</div>', unsafe_allow_html=True)
