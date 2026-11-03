@@ -1152,9 +1152,24 @@ coverage_checks["quantity_data"] = CUSTOMER["San_luong"] > 0
 coverage_checks["document_data"] = CUSTOMER["So_giao_dich"] > 0
 
 CUSTOMER["Do_phu_du_lieu"] = coverage_checks.mean(axis=1)
+# Kho/xe là hai trường kiểm soát cốt lõi trong yêu cầu NPP.
+# Nếu không có dòng xe khách hàng hoặc không có giao dịch đối chiếu kho,
+# không được xếp NPP vào nhóm xanh chỉ vì dữ liệu còn lại không có cảnh báo.
+CUSTOMER["_du_dieu_kien_kho_xe"] = (
+    (CUSTOMER["So_dong_xe_kh"] > 0) &
+    ((CUSTOMER["So_kho_ngoai"] + CUSTOMER["So_kho_trong"]) > 0)
+)
 CUSTOMER["Muc_do"] = [
-    risk_level(score, coverage)
-    for score, coverage in zip(CUSTOMER["Tong_diem"], CUSTOMER["Do_phu_du_lieu"])
+    (
+        "Chưa đủ dữ liệu"
+        if not bool(critical) or coverage < 0.75
+        else risk_level(score, coverage)
+    )
+    for score, coverage, critical in zip(
+        CUSTOMER["Tong_diem"],
+        CUSTOMER["Do_phu_du_lieu"],
+        CUSTOMER["_du_dieu_kien_kho_xe"]
+    )
 ]
 
 # ----------------------- Per-NPP narrative -------------------
