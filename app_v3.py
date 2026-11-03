@@ -610,7 +610,8 @@ warehouse_unknown = customer_vehicle[
         "Không trích xuất được mã kho từ số chứng từ",
         "Mã kho chưa có trong danh mục",
         "Chưa đủ dữ liệu địa chỉ/vùng",
-        "Chưa xác định vùng"
+        "Chưa xác định vùng",
+        WAREHOUSE_STATUS_FALLBACK
     ])
 ].copy()
 warehouse_counts = (
