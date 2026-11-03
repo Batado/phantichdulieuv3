@@ -91,21 +91,23 @@ RISK_ORDER = ["Thấp", "Theo dõi", "Cao", "Rất cao", "Chưa đủ dữ liệ
 ALIASES = {
     "customer": ["Tên khách hàng", "Tên KH", "Khách hàng", "Customer", "Customer Name"],
     "customer_id": ["Mã khách hàng", "Mã KH", "Customer Code", "Customer ID"],
-    "group": ["Tên nhóm KH", "Mã nhóm KH", "Nhóm khách hàng", "Loại khách hàng", "Loại KH", "Customer Group"],
+    "group": ["Loại khách hàng", "Nhóm khách hàng", "Loại KH", "Customer Group", "Tên nhóm KH"],
     "date": ["Ngày chứng từ", "Ngày xuất", "Ngày lấy hàng", "Ngày giao hàng", "Document Date", "Posting Date"],
     "time": ["Giờ chứng từ", "Giờ xuất", "Giờ lấy hàng", "Thời gian xuất", "Time"],
+    "region": ["Miền2", "Miền", "Vùng miền", "Khu vực", "Khu vưc"],
     "document": ["Số chứng từ", "Số CT", "Số phiếu", "Document No", "Invoice No"],
     "revenue": ["Thành tiền bán", "Doanh thu", "Thành tiền", "Sales Amount"],
     "quantity": ["Số lượng", "SL", "Quantity"],
     "weight": ["Khối lượng", "KL", "Trọng lượng", "Weight"],
     "item_code": ["Mã hàng", "Mã SP", "Mã sản phẩm", "Item Code", "SKU"],
     "item_name": ["Tên hàng", "Tên sản phẩm", "Item Name", "Product Name"],
-    "address": ["Địa điểm", "Địa điểm khách hàng", "Địa điểm giao hàng", "Địa chỉ khách hàng", "Địa chỉ", "Địa chỉ KH"],
+    "address": ["Địa chỉ", "Địa chỉ khách hàng", "Địa chỉ KH", "Địa điểm", "Địa điểm khách hàng", "Địa điểm giao hàng"],
     "warehouse": ["Mã kho", "Mã kho xuất", "Kho xuất", "Kho lấy hàng", "Địa điểm xuất", "Warehouse", "Plant"],
     "method": ["Shipping method", "Hình thức vận chuyển", "Phương thức vận chuyển", "Loại vận chuyển"],
     "vehicle": ["Biển số xe", "Số xe", "Biển kiểm soát", "Vehicle No", "License Plate"],
     "note": ["Ghi chú", "Diễn giải", "Remark", "Notes"],
-    "order_type": ["Loại đơn hàng", "Loại giao dịch", "Transaction Type"]
+    "order_type": ["Loại đơn hàng", "Loại giao dịch", "Transaction Type"],
+    "warehouse_note": ["Ghi chú2", "Kết quả kiểm tra kho", "Ghi chú kiểm tra kho"]
 }
 
 
@@ -453,7 +455,7 @@ def build_fuzzy_address_pairs(address_pairs, min_similarity=0.92, max_addresses=
 
 
 def build_vehicle_tables(car):
-    valid = car[car["_plate"].ne("")].copy()
+    valid = car[car["_plate_valid"]].copy()
     if valid.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.Series(dtype=float), pd.Series(dtype=float)
 
@@ -798,6 +800,7 @@ DF["_warehouse_code"] = DF["_warehouse_raw"].apply(clean_wh)
 DF["_method"] = DF[method_col].apply(clean)
 DF["_plate_raw"] = DF[vehicle_col].apply(clean) if vehicle_col else ""
 DF["_plate"] = DF["_plate_raw"].apply(clean_plate) if vehicle_col else ""
+DF["_plate_valid"] = DF["_plate_raw"].apply(valid_vietnam_plate) if vehicle_col else False
 
 DF["_revenue"] = DF[revenue_col].apply(parse_num) if revenue_col else 0.0
 DF["_quantity"] = DF[quantity_col].apply(parse_num) if quantity_col else 0.0
@@ -873,15 +876,38 @@ with st.sidebar:
         )
 
 region_aliases = build_region_aliases(region_text)
+
+def canonical_region(value, address, aliases):
+    source = norm(value)
+    if "mien bac" in source:
+        return "Miền Bắc"
+    if "mien trung" in source or "tay nguyen" in source:
+        return "Miền Trung và Tây Nguyên"
+    if "mien nam" in source or "mien tay" in source:
+        return "Miền Nam và Tây Nam Bộ"
+    return detect_region(address, aliases)
+
 allowed_warehouses = {
     region: {clean_wh(x) for x in split_values(value) if clean_wh(x)}
     for region, value in warehouse_text.items()
 }
 
-DF["_region"] = DF["_address"].apply(lambda x: detect_region(x, region_aliases))
-CUSTOMER_CAR_ALL["_region"] = CUSTOMER_CAR_ALL["_address"].apply(
-    lambda x: detect_region(x, region_aliases)
+DF["_region"] = (
+    DF[region_col].apply(lambda x: canonical_region(x, "", region_aliases))
+    if region_col else
+    DF["_address"].apply(lambda x: detect_region(x, region_aliases))
 )
+CUSTOMER_CAR_ALL["_region"] = (
+    CUSTOMER_CAR_ALL[region_col].apply(lambda x: canonical_region(x, "", region_aliases))
+    if region_col else
+    CUSTOMER_CAR_ALL["_address"].apply(lambda x: detect_region(x, region_aliases))
+)
+if warehouse_note_col:
+    DF["_warehouse_note_source"] = DF[warehouse_note_col].apply(clean)
+    CUSTOMER_CAR_ALL["_warehouse_note_source"] = CUSTOMER_CAR_ALL[warehouse_note_col].apply(clean)
+else:
+    DF["_warehouse_note_source"] = ""
+    CUSTOMER_CAR_ALL["_warehouse_note_source"] = ""
 CUSTOMER_CAR_ALL["_warehouse_status"] = CUSTOMER_CAR_ALL.apply(
     lambda row: warehouse_status(row, allowed_warehouses),
     axis=1
@@ -926,11 +952,11 @@ FUZZY_ADDRESS = build_fuzzy_address_pairs(ADDRESS_PAIRS)
 
 # ----------------------- Vehicle checks ----------------------
 
-VEHICLE_DATA = CUSTOMER_CAR[CUSTOMER_CAR["_plate"].ne("")].copy()
+VEHICLE_DATA = CUSTOMER_CAR[CUSTOMER_CAR["_plate_valid"]].copy()
 VEHICLE_DAY_ALL, VEHICLE_DAY_SHARED, VEHICLE_PERIOD, VEHICLE_DAY_MAP, VEHICLE_PERIOD_MAP = build_vehicle_tables(VEHICLE_DATA)
 
 # Missing plates are tracked separately, not silently discarded.
-MISSING_PLATE = CUSTOMER_CAR[CUSTOMER_CAR["_plate"].eq("")].copy()
+MISSING_PLATE = CUSTOMER_CAR[~CUSTOMER_CAR["_plate_valid"]].copy()
 
 # ----------------------- Warehouse evidence ------------------
 
@@ -1092,7 +1118,7 @@ if not CUSTOMER_CAR.empty:
             So_kho_ngoai=(" _warehouse_status".strip(), lambda x: (x == "Ngoài danh sách").sum()),
             So_kho_trong=("_warehouse_status", lambda x: (x == "Trong danh sách").sum()),
             So_kho_thieu=("_warehouse_status", lambda x: (x == "Thiếu mã kho").sum()),
-            So_dong_thieu_bien_so=("_plate", lambda x: (x == "").sum())
+            So_dong_thieu_bien_so=("_plate_valid", lambda x: (~x).sum())
         )
         .reset_index()
     )
@@ -1414,6 +1440,16 @@ with T2:
     else:
         st.dataframe(WH_STATUS_COUNTS, use_container_width=True, hide_index=True)
 
+        if warehouse_note_col and "_warehouse_note_source" in CUSTOMER_CAR.columns:
+            st.markdown("### Đối chiếu với cột Ghi chú2 có sẵn trong file")
+            st.caption("Cột Ghi chú2 được dùng làm dữ liệu tham chiếu để rà soát sự khác biệt, không tự động thay thế quy tắc kho đã thống nhất.")
+            note_compare = pd.crosstab(
+                CUSTOMER_CAR["_warehouse_status"],
+                CUSTOMER_CAR["_warehouse_note_source"],
+                dropna=False
+            ).reset_index()
+            st.dataframe(note_compare, use_container_width=True, hide_index=True)
+
         st.markdown("### Giao dịch lấy hàng ngoài danh sách vùng")
         if WH_EVIDENCE.empty:
             st.success("Chưa có giao dịch nào nằm ngoài danh sách kho theo vùng.")
@@ -1543,7 +1579,7 @@ with T4:
             hide_index=True
         )
 
-    st.markdown('<div class="section-title">THIẾU BIỂN SỐ TRONG GIAO DỊCH XE KHÁCH HÀNG</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">THIẾU / KHÔNG ĐÚNG ĐỊNH DẠNG BIỂN SỐ XE KHÁCH HÀNG</div>', unsafe_allow_html=True)
     if MISSING_PLATE.empty:
         st.success("Không có dòng xe khách hàng thiếu biển số.")
     else:
