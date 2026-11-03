@@ -1,818 +1,2811 @@
-"""
-PKD Dự Án Analytics – Hoa Sen Group  v3
-Giá bán (VNĐ/cái) × SL = Thành tiền bán
-Giá vốn (VNĐ/kg)  × KL = Thành tiền vốn
-GB/kg = Thành tiền bán / KL   →  Margin/kg = GB/kg − GV/kg
-"""
-import io, warnings
-import streamlit as st
-import pandas as pd
+
+import io
+import re
+import warnings
+import unicodedata
+from difflib import SequenceMatcher
+
 import numpy as np
+import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import streamlit as st
 
 warnings.filterwarnings("ignore")
 
-# ─────────────────────────────────────────────────────────────
-#  CONFIG & STYLE
-# ─────────────────────────────────────────────────────────────
-st.set_page_config(page_title="PKD Dự Án – Hoa Sen", layout="wide",
-                   page_icon="🏗️", initial_sidebar_state="expanded")
+# ============================================================
+# HOA SEN GROUP - NPP BUSINESS RISK ANALYTICS
+# ============================================================
+
+st.set_page_config(
+    page_title="NPP Risk Analytics - Hoa Sen",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ============================================================
+# 1. GIAO DIỆN
+# ============================================================
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
-html,body,[class*="css"]{font-family:'Be Vietnam Pro',sans-serif;}
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
 
-section[data-testid="stSidebar"]{background:#060d1c;border-right:1px solid #0f1f35;}
-section[data-testid="stSidebar"] *{color:#8aaac8!important;}
-section[data-testid="stSidebar"] label{color:#3a5a7a!important;font-size:10px;text-transform:uppercase;letter-spacing:.1em;}
-[data-testid="stAppViewContainer"]{background:#070e1d;}
-[data-testid="stHeader"]{background:transparent;}
+html, body, [class*="css"] {
+    font-family: 'Be Vietnam Pro', sans-serif;
+}
 
-/* KPI */
-.krow{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:18px;}
-.kc{background:#0b1829;border:1px solid #132240;border-radius:10px;
-    padding:14px 16px;position:relative;overflow:hidden;}
-.kc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--a);}
-.ki{font-size:18px;margin-bottom:4px;}
-.kv{font-size:21px;font-weight:800;color:#ddeeff;font-family:'JetBrains Mono',monospace;line-height:1.2;}
-.kl{font-size:10px;color:#3a5a7a;text-transform:uppercase;letter-spacing:.08em;margin-top:4px;}
+[data-testid="stAppViewContainer"] {
+    background: #07111e;
+}
 
-/* Section heading */
-.sh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.13em;
-    color:#388bfd;border-left:3px solid #388bfd;padding-left:8px;margin:20px 0 10px;}
+[data-testid="stHeader"] {
+    background: transparent;
+}
 
-/* Alert rows */
-.ah{background:#2a0e0e;border-left:3px solid #f87171;padding:8px 12px;border-radius:5px;margin:3px 0;color:#fca5a5;font-size:12px;line-height:1.5;}
-.am{background:#271a08;border-left:3px solid #fbbf24;padding:8px 12px;border-radius:5px;margin:3px 0;color:#fde68a;font-size:12px;line-height:1.5;}
-.al{background:#081a0f;border-left:3px solid #34d399;padding:8px 12px;border-radius:5px;margin:3px 0;color:#6ee7b7;font-size:12px;line-height:1.5;}
-.ai{background:#071628;border-left:3px solid #388bfd;padding:8px 12px;border-radius:5px;margin:3px 0;color:#93c5fd;font-size:12px;line-height:1.5;}
+section[data-testid="stSidebar"] {
+    background: #091626;
+    border-right: 1px solid #1b2b40;
+}
 
-/* Risk bar */
-.rb{background:#0b1829;border-radius:8px;padding:14px 16px;margin-bottom:8px;}
-.rb-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;}
-.rb-n{font-size:12px;color:#7a9abf;}
-.rb-s{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;}
-.rb-d{font-size:10.5px;color:#2e4a68;margin-bottom:5px;}
-.rb-bg{background:#132240;border-radius:99px;height:6px;}
-.rb-f{height:6px;border-radius:99px;}
+section[data-testid="stSidebar"] * {
+    color: #d4e2f2;
+}
 
-/* Gauge box */
-.gbox{background:#0b1829;border:1px solid #132240;border-radius:12px;
-      padding:18px;text-align:center;}
-.gscore{font-size:56px;font-weight:800;font-family:'JetBrains Mono',monospace;line-height:1;}
-.glabel{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-top:6px;}
-.gsub{font-size:10px;color:#3a5a7a;margin-top:4px;}
+.main-title {
+    font-size: 27px;
+    font-weight: 800;
+    color: #e4efff;
+}
 
-/* Page header */
-.ph{display:flex;align-items:center;gap:12px;margin-bottom:18px;
-    padding-bottom:14px;border-bottom:1px solid #0f1f35;}
-.ph-ic{width:38px;height:38px;background:#388bfd;border-radius:9px;
-       display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;}
-.ph-t{font-size:24px;font-weight:800;color:#ddeeff;letter-spacing:-.02em;}
-.ph-s{font-size:11px;color:#2e4a68;font-family:'JetBrains Mono',monospace;margin-top:2px;}
+.sub-title {
+    font-size: 12px;
+    color: #829ab5;
+    margin-bottom: 18px;
+}
 
-[data-testid="stTabs"] [role="tab"]{font-size:12.5px;font-weight:600;color:#3a5a7a!important;padding:7px 14px;}
-[data-testid="stTabs"] [role="tab"][aria-selected="true"]{color:#388bfd!important;border-bottom:2px solid #388bfd;background:rgba(56,139,253,.07);}
+.section-title {
+    color: #70aaff;
+    font-size: 14px;
+    font-weight: 800;
+    margin: 20px 0 10px;
+    border-left: 3px solid #388bfd;
+    padding-left: 9px;
+}
+
+.risk-red {
+    background: #39191c;
+    color: #ffb5b5;
+    border-left: 4px solid #ef4444;
+    padding: 12px;
+    margin: 5px 0;
+    border-radius: 5px;
+}
+
+.risk-orange {
+    background: #3b2814;
+    color: #ffd199;
+    border-left: 4px solid #f97316;
+    padding: 12px;
+    margin: 5px 0;
+    border-radius: 5px;
+}
+
+.risk-yellow {
+    background: #39320f;
+    color: #fff0a8;
+    border-left: 4px solid #eab308;
+    padding: 12px;
+    margin: 5px 0;
+    border-radius: 5px;
+}
+
+.risk-green {
+    background: #102d22;
+    color: #a7f3d0;
+    border-left: 4px solid #22c55e;
+    padding: 12px;
+    margin: 5px 0;
+    border-radius: 5px;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────
-#  CONSTANTS
-# ─────────────────────────────────────────────────────────────
-C  = ["#388bfd","#34d399","#fbbf24","#f87171","#a78bfa","#fb923c","#22d3ee","#e879f9","#84cc16"]
-BG = "#07111e"; PBG = "#090f1c"; GR = "rgba(255,255,255,0.05)"; FC = "#5a7a9a"
 
-NHOM = [
-    ("Ống HDPE",     r"HDPE"),
-    ("Ống PVC",      r"PVC.*(?:nước|nong|thoát|cát)"),
-    ("Ống PPR",      r"PPR"),
-    ("Lõi PVC",      r"(?:Lơi|Lõi|lori)"),
-    ("Phụ kiện",     r"(?:Nối|Co |Tê |Van |Keo |Bít|Măng|Hộp|Nắp|Y PVC|Y PPR)"),
-    ("Thép/Đặc biệt",r"(?:thép|bích|PN\d)"),
+# ============================================================
+# 2. CẤU HÌNH NGHIỆP VỤ
+# ============================================================
+
+RISK_COLORS = {
+    "Thấp": "#22c55e",
+    "Theo dõi": "#eab308",
+    "Cao": "#f97316",
+    "Rất cao": "#ef4444"
+}
+
+RISK_ORDER = ["Thấp", "Theo dõi", "Cao", "Rất cao"]
+
+VEHICLE_CLASSES = [
+    "Xe khách hàng",
+    "Xe nhà máy",
+    "Thuê ngoài",
+    "Khác / Chưa xác định"
 ]
 
-def pl(fig, title="", h=360):
-    fig.update_layout(
-        plot_bgcolor=PBG, paper_bgcolor=PBG,
-        font=dict(family="Be Vietnam Pro", color=FC, size=11),
-        title=dict(text=title, font=dict(size=13,color="#aaccee"), x=0.01),
-        height=h, margin=dict(l=8,r=8,t=38 if title else 8,b=8),
-        legend=dict(bgcolor="rgba(0,0,0,0)", font_size=11),
-        xaxis=dict(gridcolor=GR, showline=False, tickfont_size=10),
-        yaxis=dict(gridcolor=GR, showline=False, tickfont_size=10),
+# Danh sách kho được phép theo yêu cầu
+
+DEFAULT_WAREHOUSE_RULES = {
+    "Miền Nam và Tây Nam Bộ": ["053", "281", "284", "054"],
+    "Miền Trung và Tây Nguyên": [
+        "053", "252", "251", "261", "263", "284", "291"
+    ],
+    "Miền Bắc": ["291", "261"]
+}
+
+# Bao gồm tên tỉnh trước và sau sắp xếp hành chính.
+# Có thể điều chỉnh thêm tại Sidebar.
+
+DEFAULT_REGION_ALIASES = {
+    "Miền Nam và Tây Nam Bộ": """
+    Hồ Chí Minh; TP.HCM; TPHCM; Sài Gòn; Bình Dương;
+    Bà Rịa Vũng Tàu; Bà Rịa; Vũng Tàu; Đồng Nai; Bình Phước;
+    Tây Ninh; Long An; Tiền Giang; Bến Tre; Trà Vinh;
+    Vĩnh Long; Đồng Tháp; An Giang; Kiên Giang; Cần Thơ;
+    Hậu Giang; Sóc Trăng; Bạc Liêu; Cà Mau
+    """,
+
+    "Miền Trung và Tây Nguyên": """
+    Thanh Hóa; Nghệ An; Hà Tĩnh; Quảng Bình; Quảng Trị;
+    Thừa Thiên Huế; Huế; Đà Nẵng; Quảng Nam; Quảng Ngãi;
+    Kon Tum; Bình Định; Gia Lai; Phú Yên; Đắk Lắk;
+    Đắk Nông; Khánh Hòa; Ninh Thuận; Bình Thuận; Lâm Đồng
+    """,
+
+    "Miền Bắc": """
+    Hà Nội; Cao Bằng; Tuyên Quang; Hà Giang; Điện Biên;
+    Lai Châu; Sơn La; Lào Cai; Yên Bái; Thái Nguyên;
+    Bắc Kạn; Lạng Sơn; Quảng Ninh; Bắc Ninh; Bắc Giang;
+    Phú Thọ; Vĩnh Phúc; Hòa Bình; Hải Phòng; Hải Dương;
+    Hưng Yên; Thái Bình; Ninh Bình; Hà Nam; Nam Định
+    """
+}
+
+
+# ============================================================
+# 3. TÊN CỘT CÓ THỂ NHẬN DIỆN
+# ============================================================
+
+COLUMN_ALIASES = {
+    "customer": [
+        "Tên khách hàng", "Tên KH", "Khách hàng",
+        "Customer", "Customer Name"
+    ],
+
+    "customer_id": [
+        "Mã khách hàng", "Mã KH", "Customer Code",
+        "Customer ID"
+    ],
+
+    "customer_group": [
+        "Tên nhóm KH", "Mã nhóm KH", "Nhóm khách hàng",
+        "Loại khách hàng", "Loại KH", "Customer Group"
+    ],
+
+    "date": [
+        "Ngày chứng từ", "Ngày xuất", "Ngày lấy hàng",
+        "Ngày giao hàng", "Document Date", "Posting Date"
+    ],
+
+    "document": [
+        "Số chứng từ", "Số CT", "Số phiếu",
+        "Document No", "Invoice No"
+    ],
+
+    "revenue": [
+        "Thành tiền bán", "Doanh thu",
+        "Thành tiền", "Sales Amount", "Amount"
+    ],
+
+    "quantity": [
+        "Số lượng", "SL", "Quantity"
+    ],
+
+    "weight": [
+        "Khối lượng", "KL", "Trọng lượng", "Weight"
+    ],
+
+    "item_code": [
+        "Mã hàng", "Mã SP", "Mã sản phẩm",
+        "Item Code", "SKU"
+    ],
+
+    "item_name": [
+        "Tên hàng", "Tên sản phẩm",
+        "Item Name", "Product Name"
+    ],
+
+    "location": [
+        "Địa điểm", "Địa điểm khách hàng",
+        "Địa điểm giao hàng", "Địa chỉ khách hàng",
+        "Địa chỉ", "Địa chỉ KH", "Nơi giao hàng"
+    ],
+
+    "warehouse": [
+        "Mã kho", "Mã kho xuất", "Kho xuất",
+        "Kho lấy hàng", "Địa điểm xuất",
+        "Warehouse", "Storage Location", "Plant"
+    ],
+
+    "shipping_method": [
+        "Shipping method", "Hình thức vận chuyển",
+        "Phương thức vận chuyển", "Loại vận chuyển"
+    ],
+
+    "vehicle": [
+        "Biển số xe", "Số xe", "Xe khách hàng",
+        "Biển kiểm soát", "Vehicle No", "License Plate"
+    ],
+
+    "note": [
+        "Ghi chú", "Diễn giải", "Remark", "Notes"
+    ],
+
+    "order_type": [
+        "Loại đơn hàng", "Loại giao dịch",
+        "Transaction Type"
+    ]
+}
+
+
+# ============================================================
+# 4. CÁC HÀM CHUẨN HÓA
+# ============================================================
+
+def normalize_text(value):
+    if pd.isna(value):
+        return ""
+
+    value = str(value).strip().lower()
+    value = unicodedata.normalize("NFKD", value)
+
+    value = "".join(
+        ch for ch in value
+        if not unicodedata.combining(ch)
     )
-    return fig
 
-def f(v):
+    value = value.replace("đ", "d")
+    value = re.sub(r"[^a-z0-9]+", " ", value)
+    value = re.sub(r"\s+", " ", value)
+
+    return value.strip()
+
+
+def clean_text(value):
+    if pd.isna(value):
+        return ""
+
+    value = str(value).strip()
+
+    if value.lower() in ["nan", "none", "null"]:
+        return ""
+
+    return value
+
+
+def clean_vehicle(value):
+    if pd.isna(value):
+        return ""
+
+    value = str(value).upper().strip()
+    value = re.sub(r"[^A-Z0-9]", "", value)
+
+    if value in ["NAN", "NONE", "NULL"]:
+        return ""
+
+    return value
+
+
+def number_value(value):
+    """Chuyển số có dấu phân cách Việt Nam/Anh thành số."""
+
+    if pd.isna(value):
+        return 0.0
+
+    if isinstance(value, (int, float, np.number)):
+        return float(value)
+
+    text = str(value).strip().replace(" ", "")
+
+    if not text:
+        return 0.0
+
+    if "," in text and "." in text:
+        if text.rfind(",") > text.rfind("."):
+            text = text.replace(".", "").replace(",", ".")
+        else:
+            text = text.replace(",", "")
+
+    elif "," in text:
+        parts = text.split(",")
+
+        if len(parts[-1]) <= 2:
+            text = text.replace(".", "").replace(",", ".")
+        else:
+            text = text.replace(",", "")
+
     try:
-        v=float(v)
-        if abs(v)>=1e9: return f"{v/1e9:.2f} Tỷ"
-        if abs(v)>=1e6: return f"{v/1e6:.1f} Tr"
-        if abs(v)>=1e3: return f"{v/1e3:.0f}K"
-        return f"{v:,.0f}"
-    except: return str(v)
+        return float(text)
+    except Exception:
+        return 0.0
 
-def kpi(col,accent,icon,lab,val):
-    col.markdown(f'<div class="kc" style="--a:{accent}"><div class="ki">{icon}</div>'
-                 f'<div class="kv">{val}</div><div class="kl">{lab}</div></div>',
-                 unsafe_allow_html=True)
 
-def sh(t): st.markdown(f'<div class="sh">{t}</div>', unsafe_allow_html=True)
-def al(cls,t): st.markdown(f'<div class="{cls}">{t}</div>', unsafe_allow_html=True)
+def numeric_series(series):
+    return series.apply(number_value)
 
-# ─────────────────────────────────────────────────────────────
-#  HEADER FIND
-# ─────────────────────────────────────────────────────────────
-def find_hdr(fb):
+
+def clean_warehouse_code(value):
+    """Chuẩn hóa 53, 53.0, 053 hoặc Kho 053 thành 053."""
+
+    if pd.isna(value):
+        return ""
+
+    text = str(value).strip()
+
+    if text.lower() in ["", "nan", "none", "null"]:
+        return ""
+
+    match = re.search(
+        r"(?<!\d)(\d{1,3})(?:\.0+)?(?!\d)",
+        text
+    )
+
+    if not match:
+        return ""
+
+    return match.group(1).zfill(3)
+
+
+def split_values(value):
+    return [
+        x.strip()
+        for x in re.split(r"[,;\n]+", str(value))
+        if x.strip()
+    ]
+
+
+def unique_join(series):
+    values = sorted({
+        str(x).strip()
+        for x in series
+        if pd.notna(x) and str(x).strip()
+    })
+
+    return "; ".join(values)
+
+
+def risk_level(score):
+    if score >= 65:
+        return "Rất cao"
+
+    if score >= 45:
+        return "Cao"
+
+    if score >= 25:
+        return "Theo dõi"
+
+    return "Thấp"
+
+
+def format_number(value):
     try:
-        raw=pd.read_excel(io.BytesIO(fb),header=None,engine="openpyxl",nrows=40)
-        kws=["khách hàng","số chứng từ","tên hàng","ngày chứng từ","thành tiền bán"]
-        for i in range(raw.shape[0]):
-            vals=["" if (isinstance(v,float) and pd.isna(v)) else str(v) for v in raw.iloc[i]]
-            if sum(1 for k in kws if k in " ".join(vals).lower())>=2: return i
-    except: pass
-    return 0
+        return f"{float(value):,.0f}"
+    except Exception:
+        return "0"
 
-# ─────────────────────────────────────────────────────────────
-#  UPLOAD
-# ─────────────────────────────────────────────────────────────
+
+def find_column(columns, aliases):
+    normalized = {
+        normalize_text(c): c
+        for c in columns
+    }
+
+    for alias in aliases:
+        key = normalize_text(alias)
+
+        if key in normalized:
+            return normalized[key]
+
+    for alias in aliases:
+        key = normalize_text(alias)
+
+        for norm_col, original in normalized.items():
+            if key and key in norm_col:
+                return original
+
+    return None
+
+
+# ============================================================
+# 5. ĐỌC FILE EXCEL
+# ============================================================
+
+HEADER_KEYWORDS = [
+    "ten khach hang",
+    "ma khach hang",
+    "ngay chung tu",
+    "dia diem",
+    "ma kho",
+    "ten hang",
+    "shipping method",
+    "thanh tien ban",
+    "so luong"
+]
+
+
+def detect_header_row(file_bytes, sheet_name):
+    raw = pd.read_excel(
+        io.BytesIO(file_bytes),
+        sheet_name=sheet_name,
+        header=None,
+        nrows=40,
+        engine="openpyxl"
+    )
+
+    best_row = 0
+    best_score = 0
+
+    for idx in range(len(raw)):
+        values = [
+            normalize_text(v)
+            for v in raw.iloc[idx].tolist()
+        ]
+
+        joined = " ".join(values)
+
+        score = sum(
+            keyword in joined
+            for keyword in HEADER_KEYWORDS
+        )
+
+        if score > best_score:
+            best_score = score
+            best_row = idx
+
+    return best_row
+
+
+def unique_columns(columns):
+    seen = {}
+    output = []
+
+    for col in columns:
+        name = str(col).strip().replace("\n", " ")
+
+        if not name or name.lower() == "nan":
+            name = "Column"
+
+        if name in seen:
+            seen[name] += 1
+            name = f"{name}_{seen[name]}"
+        else:
+            seen[name] = 0
+
+        output.append(name)
+
+    return output
+
+
+def read_excel_files(files):
+    frames = []
+    errors = []
+
+    for uploaded in files:
+        file_bytes = uploaded.getvalue()
+
+        try:
+            excel = pd.ExcelFile(
+                io.BytesIO(file_bytes),
+                engine="openpyxl"
+            )
+
+            for sheet_name in excel.sheet_names:
+                try:
+                    header = detect_header_row(
+                        file_bytes,
+                        sheet_name
+                    )
+
+                    data = pd.read_excel(
+                        io.BytesIO(file_bytes),
+                        sheet_name=sheet_name,
+                        header=header,
+                        engine="openpyxl"
+                    )
+
+                    data.columns = unique_columns(data.columns)
+                    data = data.dropna(how="all")
+
+                    if data.empty:
+                        continue
+
+                    data["_File"] = uploaded.name
+                    data["_Sheet"] = sheet_name
+
+                    frames.append(data)
+
+                except Exception as exc:
+                    errors.append(
+                        f"{uploaded.name} / {sheet_name}: {exc}"
+                    )
+
+        except Exception as exc:
+            errors.append(f"{uploaded.name}: {exc}")
+
+    if not frames:
+        return pd.DataFrame(), errors
+
+    result = pd.concat(
+        frames,
+        ignore_index=True,
+        sort=False
+    )
+
+    result = result.loc[
+        :, ~result.columns.duplicated()
+    ].copy()
+
+    return result, errors
+
+
+# ============================================================
+# 6. XÁC ĐỊNH VÙNG ĐỊA LÝ
+# ============================================================
+
+def build_region_aliases(config):
+    output = {}
+
+    for region, text in config.items():
+        aliases = split_values(text)
+
+        output[region] = sorted(
+            {
+                normalize_text(x)
+                for x in aliases
+                if normalize_text(x)
+            },
+            key=len,
+            reverse=True
+        )
+
+    return output
+
+
+def detect_region(address, aliases):
+    address_norm = normalize_text(address)
+
+    if not address_norm:
+        return "Thiếu địa điểm"
+
+    padded = f" {address_norm} "
+
+    for region, names in aliases.items():
+        for name in names:
+            if f" {name} " in padded:
+                return region
+
+    return "Chưa xác định vùng"
+
+
+# ============================================================
+# 7. KIỂM TRA VÀ XỬ LÝ DỮ LIỆU
+# ============================================================
+
+def process_data(
+    raw,
+    customer_col,
+    customer_id_col,
+    date_col,
+    location_col,
+    warehouse_col,
+    shipping_col,
+    vehicle_col,
+    revenue_col,
+    quantity_col,
+    weight_col,
+    item_code_col,
+    item_name_col,
+    document_col,
+    group_col,
+    note_col,
+    order_type_col
+):
+
+    data = raw.copy()
+
+    data["_customer_name"] = data[customer_col].apply(
+        clean_text
+    )
+
+    if customer_id_col:
+        data["_customer_id"] = data[customer_id_col].apply(
+            clean_text
+        )
+
+        data["_customer_key"] = np.where(
+            data["_customer_id"].ne(""),
+            "ID:" + data["_customer_id"],
+            "NAME:" + data["_customer_name"].apply(normalize_text)
+        )
+    else:
+        data["_customer_key"] = (
+            "NAME:" + data["_customer_name"].apply(normalize_text)
+        )
+
+    data["_date"] = pd.to_datetime(
+        data[date_col],
+        dayfirst=True,
+        errors="coerce"
+    )
+
+    data = data[
+        data["_date"].notna()
+        & data["_customer_name"].ne("")
+    ].copy()
+
+    data["_date_only"] = data["_date"].dt.date
+    data["_month"] = data["_date"].dt.to_period("M").astype(str)
+
+    data["_address"] = data[location_col].apply(clean_text)
+    data["_address_norm"] = data["_address"].apply(normalize_text)
+
+    data["_warehouse_raw"] = data[warehouse_col].apply(clean_text)
+    data["_warehouse_code"] = data["_warehouse_raw"].apply(
+        clean_warehouse_code
+    )
+
+    data["_method"] = data[shipping_col].apply(clean_text)
+    data["_vehicle_raw"] = data[vehicle_col].apply(clean_text)
+    data["_vehicle_norm"] = data["_vehicle_raw"].apply(clean_vehicle)
+
+    data["_revenue"] = (
+        numeric_series(data[revenue_col])
+        if revenue_col else 0.0
+    )
+
+    data["_quantity"] = (
+        numeric_series(data[quantity_col])
+        if quantity_col else 0.0
+    )
+
+    data["_weight"] = (
+        numeric_series(data[weight_col])
+        if weight_col else 0.0
+    )
+
+    return data
+
+
+# ============================================================
+# 8. HEADER ỨNG DỤNG
+# ============================================================
+
+st.markdown("""
+<div class="main-title">NPP BUSINESS RISK ANALYTICS</div>
+<div class="sub-title">
+HOA SEN GROUP | PHÂN TÍCH RỦI RO NHÀ PHÂN PHỐI
+</div>
+""", unsafe_allow_html=True)
+
+
+# ============================================================
+# 9. UPLOAD FILE
+# ============================================================
+
 with st.sidebar:
-    st.markdown('<div style="padding:14px 0 10px;border-bottom:1px solid #0f1f35;margin-bottom:12px;">'
-                '<span style="font-size:14px;font-weight:700;color:#ddeeff;">🏗️ PKD Dự Án</span><br>'
-                '<span style="font-size:10px;color:#2e4a68;">Hoa Sen Group Analytics</span></div>',
-                unsafe_allow_html=True)
-    up = st.file_uploader("📂 Upload Excel báo cáo", type=["xlsx"], accept_multiple_files=True)
+    st.markdown("## 📂 DỮ LIỆU")
 
-if not up:
-    st.markdown('<div style="display:flex;flex-direction:column;align-items:center;'
-                'justify-content:center;height:70vh;gap:12px;text-align:center;">'
-                '<div style="font-size:56px;">🏗️</div>'
-                '<div style="font-size:22px;font-weight:800;color:#ddeeff;">PKD Dự Án Analytics</div>'
-                '<div style="font-size:13px;color:#2e4a68;">Upload file Excel báo cáo bán hàng để bắt đầu</div>'
-                '</div>', unsafe_allow_html=True)
+    uploaded_files = st.file_uploader(
+        "Tải file Excel báo cáo bán hàng",
+        type=["xlsx"],
+        accept_multiple_files=True
+    )
+
+if not uploaded_files:
+    st.info("Tải file Excel để bắt đầu phân tích.")
     st.stop()
 
-# ─────────────────────────────────────────────────────────────
-#  LOAD & COMPUTE
-# ─────────────────────────────────────────────────────────────
-@st.cache_data(show_spinner="⏳ Đang xử lý…")
-def load(fdata):
-    frames=[]
-    for name,fb in fdata:
-        try:
-            hr=find_hdr(fb)
-            d=pd.read_excel(io.BytesIO(fb),header=hr,engine="openpyxl")
-            d.columns=[str(c).strip().replace("\n"," ") for c in d.columns]
-            d=d.loc[:,~d.columns.str.startswith("Unnamed")].dropna(how="all")
-            d["_f"]=name; frames.append(d)
-        except Exception as e:
-            st.warning(f"⚠️ {name}: {e}")
-    if not frames: return pd.DataFrame()
-    df=pd.concat(frames,ignore_index=True)
+RAW, READ_ERRORS = read_excel_files(uploaded_files)
 
-    # ── Kiểm tra cột bắt buộc
-    req=["Tên khách hàng","Ngày chứng từ","Thành tiền bán"]
-    miss=[c for c in req if c not in df.columns]
-    if miss: st.error(f"❌ Thiếu cột: {miss}"); return pd.DataFrame()
+if RAW.empty:
+    st.error("Không đọc được dữ liệu từ file Excel.")
+    st.stop()
 
-    # ── Số hoá
-    NUM=["Thành tiền bán","Thành tiền vốn","Lợi nhuận","Khối lượng","Số lượng",
-         "Giá bán","Giá vốn","Đơn giá vận chuyển","Đơn giá quy đổi"]
-    for c in NUM:
-        df[c]=pd.to_numeric(df.get(c,0),errors="coerce").fillna(0)
+if READ_ERRORS:
+    with st.expander("Các sheet/file gặp lỗi"):
+        for error in READ_ERRORS:
+            st.write(error)
 
-    # ── Ngày
-    df["Ngày chứng từ"]=pd.to_datetime(df["Ngày chứng từ"],dayfirst=True,errors="coerce")
-    df=df[df["Ngày chứng từ"].notna()].copy()
-    df["Nam"]  =df["Ngày chứng từ"].dt.year.astype(str)
-    df["Quy"]  =df["Ngày chứng từ"].dt.to_period("Q").astype(str)
-    df["Thang"]=df["Ngày chứng từ"].dt.to_period("M").astype(str)
-    df["Day"]  =df["Ngày chứng từ"].dt.day
-    df["Cuoi"] =df["Day"]>=28
+COLUMNS = RAW.columns.tolist()
 
-    # ── Loại GD
-    gc =df["Ghi chú"].astype(str).str.upper()       if "Ghi chú"       in df.columns else pd.Series("",index=df.index)
-    lo =df["Loại đơn hàng"].astype(str).str.upper() if "Loại đơn hàng" in df.columns else pd.Series("",index=df.index)
-    df["GD"]="Bán"
-    df.loc[gc.str.contains(r"NHẬP TRẢ|TRẢ HÀNG",regex=True,na=False),"GD"]="Trả"
-    df.loc[lo.str.contains(r"TRA HANG|HUY HD",regex=True,na=False),"GD"]="Trả"
-    df.loc[gc.str.contains(r"BỔ SUNG|THAY THẾ|BS PKTM",regex=True,na=False),"GD"]="Bổ sung"
-    df.loc[(df["Khối lượng"]<0)&(df["GD"]=="Bán"),"GD"]="Nhập lại"
 
-    # ── GIÁ (logic đúng)
-    # GB/cái = TT bán ÷ SL
-    df["GB_cai"]=np.where(df["Số lượng"]!=0, df["Thành tiền bán"]/df["Số lượng"], df["Giá bán"])
-    # GV/kg = cột Giá vốn (đã là VNĐ/kg)
-    df["GV_kg"]=df["Giá vốn"]
-    # GB/kg = TT bán ÷ KL  (để so sánh với GV/kg)
-    df["GB_kg"]=np.where(df["Khối lượng"]!=0, df["Thành tiền bán"]/df["Khối lượng"], 0)
-    # Margin/kg
-    df["Mgn_kg"]=df["GB_kg"]-df["GV_kg"]
-    df["Mgn_pct"]=np.where(df["GB_kg"]!=0, df["Mgn_kg"]/df["GB_kg"]*100, 0)
-    # Biên LN chính thức
-    df["Bien"]=np.where(df["Thành tiền bán"]!=0, df["Lợi nhuận"]/df["Thành tiền bán"]*100, 0)
+# ============================================================
+# 10. CHỌN CỘT
+# ============================================================
 
-    # ── Z-score giá bán/cái (so cùng SP)
-    m=df[(df["Số lượng"]>0)&(df["GB_cai"]>0)].copy()
-    df.loc[m.index,"Z_gb"]=m.groupby("Tên hàng")["GB_cai"].transform(
-        lambda x:(x-x.mean())/(x.std()+1e-9))
+def choose_column(label, key, required=False):
+    detected = find_column(
+        COLUMNS,
+        COLUMN_ALIASES[key]
+    )
 
-    # ── Z-score giá vốn/kg (so cùng SP)
-    m2=df[(df["Khối lượng"]>0)&(df["GV_kg"]>0)].copy()
-    df.loc[m2.index,"Z_gv"]=m2.groupby("Tên hàng")["GV_kg"].transform(
-        lambda x:(x-x.mean())/(x.std()+1e-9))
+    options = ["-- Không chọn --"] + COLUMNS
 
-    # ── TB thị trường giá bán/cái theo SP (trong dataset)
-    sp_tb=df[df["GB_cai"]>0].groupby("Tên hàng")["GB_cai"].mean()
-    df["SP_tb"]=df["Tên hàng"].map(sp_tb)
-    df["Disc"]= np.where(df["SP_tb"]>0,(df["SP_tb"]-df["GB_cai"])/df["SP_tb"]*100,0)
+    default_index = (
+        options.index(detected)
+        if detected in options
+        else 0
+    )
 
-    # ── Nhóm SP
-    ten=df["Tên hàng"].astype(str) if "Tên hàng" in df.columns else pd.Series("",index=df.index)
-    df["NSP"]="Khác"
-    for lbl,pat in NHOM:
-        df.loc[ten.str.contains(pat,case=False,regex=True,na=False),"NSP"]=lbl
+    selected = st.selectbox(
+        label,
+        options,
+        index=default_index,
+        key=f"column_{key}"
+    )
 
-    # ── Tỉnh (trích xuất từ Nơi giao hàng)
-    if "Nơi giao hàng" in df.columns:
-        tinh=df["Nơi giao hàng"].astype(str).str.extract(
-            r'(?:Tỉnh|T\.|TP\s|Thành phố|tỉnh)\s*([A-ZÀ-Ỹa-zà-ỹ\s]+?)(?:,|\.|$)')[0].str.strip()
-        df["Tinh"]=tinh.fillna("Khác")
-    else: df["Tinh"]="Khác"
+    if selected == "-- Không chọn --":
+        if required:
+            st.warning(f"Bạn cần chọn cột {label}.")
+        return None
 
-    return df
+    return selected
 
-fdata=[(u.name,u.read()) for u in up]
-DF=load(fdata)
-if DF.empty: st.error("Không có dữ liệu hợp lệ."); st.stop()
 
-# ─────────────────────────────────────────────────────────────
-#  SIDEBAR FILTERS  (PKD → KH → Quý → Tháng)
-# ─────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown('<p style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;'
-                'color:#2e4a68;margin:12px 0 6px;">🔍 Bộ lọc</p>', unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("## 🧩 ÁNH XẠ CỘT")
 
-    PKD_COL="Tên nhóm KH" if "Tên nhóm KH" in DF.columns else "Mã nhóm KH"
-    pkd_opts=["Tất cả"]+sorted(DF[PKD_COL].dropna().astype(str).unique())
-    pkd=st.selectbox("🏢 Phòng Kinh Doanh Dự Án", pkd_opts)
+    customer_col = choose_column("Tên khách hàng", "customer", True)
+    customer_id_col = choose_column("Mã khách hàng", "customer_id")
+    group_col = choose_column("Nhóm khách hàng", "customer_group")
+    date_col = choose_column("Ngày chứng từ", "date", True)
+    document_col = choose_column("Số chứng từ", "document")
 
-    D1=DF[DF[PKD_COL].astype(str)==pkd].copy() if pkd!="Tất cả" else DF.copy()
+    location_col = choose_column(
+        "Địa điểm (địa chỉ NPP)",
+        "location",
+        True
+    )
 
-    kh_opts=["Tất cả"]+sorted(D1["Tên khách hàng"].dropna().astype(str).unique())
-    kh=st.selectbox("👤 Khách hàng", kh_opts)
+    warehouse_col = choose_column(
+        "Mã kho / Kho xuất",
+        "warehouse",
+        True
+    )
 
-    D2=D1[D1["Tên khách hàng"].astype(str)==kh].copy() if kh!="Tất cả" else D1.copy()
+    shipping_col = choose_column(
+        "Hình thức vận chuyển",
+        "shipping_method",
+        True
+    )
 
-    q_opts=sorted(D2["Quy"].dropna().unique())
-    q_sel=st.multiselect("📅 Quý", q_opts, default=q_opts)
-    D2=D2[D2["Quy"].isin(q_sel)].copy()
+    vehicle_col = choose_column(
+        "Biển số xe",
+        "vehicle",
+        True
+    )
 
-    t_opts=sorted(D2["Thang"].dropna().unique())
-    t_sel=st.multiselect("📆 Tháng", t_opts, default=t_opts)
-    D2=D2[D2["Thang"].isin(t_sel)].copy()
+    revenue_col = choose_column("Doanh thu", "revenue")
+    quantity_col = choose_column("Số lượng", "quantity")
+    weight_col = choose_column("Khối lượng", "weight")
+    item_code_col = choose_column("Mã hàng", "item_code")
+    item_name_col = choose_column("Tên hàng", "item_name")
+    note_col = choose_column("Ghi chú", "note")
+    order_type_col = choose_column("Loại giao dịch", "order_type")
 
-    st.markdown(f'<p style="font-size:10px;color:#2e4a68;margin-top:8px;">{len(D2):,} dòng · '
-                f'{D2["Thang"].nunique()} tháng</p>', unsafe_allow_html=True)
+if not all([
+    customer_col,
+    date_col,
+    location_col,
+    warehouse_col,
+    shipping_col,
+    vehicle_col
+]):
+    st.error(
+        "Cần chọn đủ các cột: Tên khách hàng, Ngày chứng từ, "
+        "Địa điểm, Mã kho, Hình thức vận chuyển và Biển số xe."
+    )
+    st.stop()
 
-BAN=D2[D2["GD"]=="Bán"].copy()   # chỉ xuất bán
 
-# ─────────────────────────────────────────────────────────────
-#  PAGE HEADER
-# ─────────────────────────────────────────────────────────────
-nm=D2["Ngày chứng từ"].min(); nx=D2["Ngày chứng từ"].max()
-scope=kh if kh!="Tất cả" else pkd
-st.markdown(f'<div class="ph"><div class="ph-ic">🏗️</div><div>'
-            f'<div class="ph-t">{scope}</div>'
-            f'<div class="ph-s">{nm.strftime("%d/%m/%Y") if pd.notna(nm) else "?"} → '
-            f'{nx.strftime("%d/%m/%Y") if pd.notna(nx) else "?"} &nbsp;·&nbsp; PKD Dự Án Analytics</div>'
-            f'</div></div>', unsafe_allow_html=True)
+# ============================================================
+# 11. LỌC ĐÚNG KHÁCH HÀNG NPP
+# ============================================================
 
-if BAN.empty:
-    st.warning("⚠️ Không có dữ liệu xuất bán."); st.stop()
+BASE = RAW.copy()
+BASE["_customer_name"] = BASE[customer_col].apply(clean_text)
 
-# ─────────────────────────────────────────────────────────────
-#  KPI ROW
-# ─────────────────────────────────────────────────────────────
-tDT =BAN["Thành tiền bán"].sum()
-tLN =BAN["Lợi nhuận"].sum()
-tKL =BAN["Khối lượng"].sum()/1000
-tSL =BAN["Số lượng"].sum()
-bien=(tLN/tDT*100) if tDT else 0
-nDH =BAN["Số ĐH"].nunique() if "Số ĐH" in BAN.columns else 0
+if group_col:
+    group_options = sorted(
+        BASE[group_col].dropna().astype(str).unique()
+    )
 
-st.markdown('<div class="krow">',unsafe_allow_html=True)
-c1,c2,c3,c4,c5,c6=st.columns(6)
-kpi(c1,"#388bfd","💰","Doanh thu",f(tDT))
-kpi(c2,"#34d399","💹","Lợi nhuận",f(tLN))
-kpi(c3,"#fbbf24","📊","Biên LN %",f"{bien:.1f}%")
-kpi(c4,"#a78bfa","⚖️","KL (tấn)",f"{tKL:,.1f}")
-kpi(c5,"#22d3ee","📦","SL (cái)",f"{int(tSL):,}")
-kpi(c6,"#fb923c","🏗️","Dự án / ĐH",f"{nDH}")
-st.markdown('</div>',unsafe_allow_html=True)
+    default_groups = [
+        x for x in group_options
+        if (
+            "npp" in normalize_text(x)
+            or "nha phan phoi" in normalize_text(x)
+        )
+    ]
 
-# ─────────────────────────────────────────────────────────────
-#  4 TABS
-# ─────────────────────────────────────────────────────────────
-T1,T2,T3,T4=st.tabs([
-    "📦 Sản phẩm & Dự án",
-    "📈 Doanh thu & Sản lượng",
-    "💹 Lợi nhuận & Giá",
-    "⚠️ Rủi ro & Bất thường",
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown("## 🏢 PHẠM VI NPP")
+
+        selected_groups = st.multiselect(
+            "Chọn nhóm Nhà Phân Phối",
+            group_options,
+            default=default_groups
+        )
+
+    if not selected_groups:
+        st.warning("Chọn nhóm khách hàng NPP trước khi phân tích.")
+        st.stop()
+
+    BASE = BASE[
+        BASE[group_col].astype(str).isin(selected_groups)
+    ].copy()
+
+else:
+    with st.sidebar:
+        confirm_npp = st.checkbox(
+            "Tôi xác nhận file này chỉ chứa Nhà Phân Phối",
+            value=False
+        )
+
+    if not confirm_npp:
+        st.warning(
+            "File không có cột nhóm khách hàng. "
+            "Cần xác nhận dữ liệu chỉ bao gồm NPP."
+        )
+        st.stop()
+
+
+# ============================================================
+# 12. LOẠI MÃ HÀNG Z VÀ HÀNG CHIẾT KHẤU
+# ============================================================
+
+rows_before_filter = len(BASE)
+
+removed_z = 0
+removed_discount = 0
+
+if item_code_col:
+    code = BASE[item_code_col].fillna("").astype(str).str.strip()
+
+    mask_z = code.str.upper().str.startswith("Z", na=False)
+
+    removed_z = int(mask_z.sum())
+
+    BASE = BASE[~mask_z].copy()
+
+if item_name_col:
+    item_norm = BASE[item_name_col].apply(normalize_text)
+
+    mask_discount = item_norm.str.contains(
+        "chiet khau",
+        na=False
+    )
+
+    removed_discount = int(mask_discount.sum())
+
+    BASE = BASE[~mask_discount].copy()
+
+
+# ============================================================
+# 13. TÙY CHỌN LOẠI GIAO DỊCH TRẢ HÀNG
+# ============================================================
+
+if note_col:
+    note_norm = BASE[note_col].apply(normalize_text)
+else:
+    note_norm = pd.Series("", index=BASE.index)
+
+if order_type_col:
+    order_norm = BASE[order_type_col].apply(normalize_text)
+else:
+    order_norm = pd.Series("", index=BASE.index)
+
+return_mask = (
+    note_norm.str.contains(
+        r"nhap tra|tra hang|huy hoa don",
+        regex=True,
+        na=False
+    )
+    |
+    order_norm.str.contains(
+        r"tra hang|huy hd|nhap tra",
+        regex=True,
+        na=False
+    )
+)
+
+if revenue_col:
+    return_mask |= numeric_series(BASE[revenue_col]) < 0
+
+if quantity_col:
+    return_mask |= numeric_series(BASE[quantity_col]) < 0
+
+with st.sidebar:
+    exclude_returns = st.checkbox(
+        "Loại giao dịch trả hàng / hủy / số âm",
+        value=True
+    )
+
+removed_returns = int(return_mask.sum()) if exclude_returns else 0
+
+if exclude_returns:
+    BASE = BASE[~return_mask].copy()
+
+
+# ============================================================
+# 14. CHUẨN HÓA TOÀN BỘ DỮ LIỆU
+# ============================================================
+
+DF = process_data(
+    BASE,
+    customer_col,
+    customer_id_col,
+    date_col,
+    location_col,
+    warehouse_col,
+    shipping_col,
+    vehicle_col,
+    revenue_col,
+    quantity_col,
+    weight_col,
+    item_code_col,
+    item_name_col,
+    document_col,
+    group_col,
+    note_col,
+    order_type_col
+)
+
+if DF.empty:
+    st.error("Không có dữ liệu hợp lệ sau khi làm sạch.")
+    st.stop()
+
+
+# ============================================================
+# 15. PHÂN LOẠI HÌNH THỨC VẬN CHUYỂN
+# ============================================================
+
+def suggest_vehicle_class(value):
+    text = normalize_text(value)
+
+    if any(x in text for x in [
+        "thue ngoai", "xe thue", "outsourced"
+    ]):
+        return "Thuê ngoài"
+
+    if any(x in text for x in [
+        "xe nha may", "nha may", "factory"
+    ]):
+        return "Xe nhà máy"
+
+    if any(x in text for x in [
+        "xe khach hang", "khach hang", "khach tu lay",
+        "xe kh", "npp", "customer"
+    ]):
+        return "Xe khách hàng"
+
+    return "Khác / Chưa xác định"
+
+
+method_values = sorted(
+    DF["_method"].dropna().astype(str).unique()
+)
+
+method_config = pd.DataFrame({
+    "Hình thức vận chuyển": method_values,
+    "Phân loại": [
+        suggest_vehicle_class(x)
+        for x in method_values
+    ]
+})
+
+st.markdown(
+    '<div class="section-title">PHÂN LOẠI PHƯƠNG TIỆN VẬN CHUYỂN</div>',
+    unsafe_allow_html=True
+)
+
+st.caption(
+    "Kiểm tra và điều chỉnh phân loại trước khi chạy. "
+    "Chỉ hình thức được xác định là Xe khách hàng được phân tích. "
+    "Xe nhà máy, thuê ngoài và chưa xác định sẽ bị loại khỏi module xe."
+)
+
+method_config = st.data_editor(
+    method_config,
+    use_container_width=True,
+    hide_index=True,
+    disabled=["Hình thức vận chuyển"],
+    column_config={
+        "Phân loại": st.column_config.SelectboxColumn(
+            "Phân loại",
+            options=VEHICLE_CLASSES,
+            required=True
+        )
+    },
+    key="method_config"
+)
+
+method_map = dict(
+    zip(
+        method_config["Hình thức vận chuyển"],
+        method_config["Phân loại"]
+    )
+)
+
+DF["_vehicle_class"] = (
+    DF["_method"].map(method_map)
+    .fillna("Khác / Chưa xác định")
+)
+
+# Chỉ dùng xe khách hàng.
+CUSTOMER_CAR = DF[
+    DF["_vehicle_class"] == "Xe khách hàng"
+].copy()
+
+FACTORY_CAR = DF[
+    DF["_vehicle_class"] == "Xe nhà máy"
+].copy()
+
+OUTSOURCE_CAR = DF[
+    DF["_vehicle_class"] == "Thuê ngoài"
+].copy()
+
+UNKNOWN_CAR = DF[
+    DF["_vehicle_class"] == "Khác / Chưa xác định"
+].copy()
+
+
+# ============================================================
+# 16. CẤU HÌNH ĐỊA BÀN
+# ============================================================
+
+with st.sidebar:
+    st.markdown("---")
+    st.markdown("## 🗺️ CẤU HÌNH VÙNG")
+
+    region_config = {}
+
+    for region, default_text in DEFAULT_REGION_ALIASES.items():
+        region_config[region] = st.text_area(
+            region,
+            value=default_text.strip(),
+            height=100,
+            key=f"region_{region}"
+        )
+
+region_aliases = build_region_aliases(region_config)
+
+
+# ============================================================
+# 17. CẤU HÌNH KHO
+# ============================================================
+
+with st.sidebar:
+    st.markdown("## 🏭 DANH SÁCH MÃ KHO")
+
+    warehouse_config = {}
+
+    for region, codes in DEFAULT_WAREHOUSE_RULES.items():
+        warehouse_config[region] = st.text_input(
+            region,
+            value=", ".join(codes),
+            key=f"warehouse_{region}"
+        )
+
+warehouse_rules = {
+    region: {
+        clean_warehouse_code(code)
+        for code in split_values(text)
+        if clean_warehouse_code(code)
+    }
+    for region, text in warehouse_config.items()
+}
+
+
+# ============================================================
+# 18. XÁC ĐỊNH VÙNG VÀ ĐỐI CHIẾU KHO
+# ============================================================
+
+DF["_region"] = DF["_address"].apply(
+    lambda x: detect_region(x, region_aliases)
+)
+
+DF["_warehouse_status"] = "Không áp dụng"
+
+CUSTOMER_CAR = DF[
+    DF["_vehicle_class"] == "Xe khách hàng"
+].copy()
+
+
+def check_warehouse(row):
+    region = row["_region"]
+    code = row["_warehouse_code"]
+
+    if not code:
+        return "Thiếu mã kho"
+
+    if region == "Thiếu địa điểm":
+        return "Thiếu địa điểm"
+
+    if region == "Chưa xác định vùng":
+        return "Chưa xác định vùng"
+
+    allowed = warehouse_rules.get(region, set())
+
+    if not allowed:
+        return "Chưa cấu hình danh sách kho"
+
+    if code in allowed:
+        return "Trong danh sách"
+
+    return "Ngoài danh sách"
+
+
+CUSTOMER_CAR["_warehouse_status"] = CUSTOMER_CAR.apply(
+    check_warehouse,
+    axis=1
+)
+
+
+# ============================================================
+# 19. BỘ LỌC THỜI GIAN
+# ============================================================
+
+with st.sidebar:
+    st.markdown("---")
+    st.markdown("## 🔍 BỘ LỌC")
+
+    min_date = DF["_date"].min().date()
+    max_date = DF["_date"].max().date()
+
+    date_range = st.date_input(
+        "Khoảng thời gian",
+        value=(min_date, max_date)
+    )
+
+    daily_threshold = st.number_input(
+        "Số chứng từ/ngày cảnh báo",
+        min_value=2,
+        max_value=100,
+        value=5
+    )
+
+if isinstance(date_range, tuple) and len(date_range) == 2:
+    start_date, end_date = date_range
+else:
+    start_date, end_date = min_date, max_date
+
+DF = DF[
+    (DF["_date"].dt.date >= start_date)
+    & (DF["_date"].dt.date <= end_date)
+].copy()
+
+CUSTOMER_CAR = CUSTOMER_CAR[
+    (CUSTOMER_CAR["_date"].dt.date >= start_date)
+    & (CUSTOMER_CAR["_date"].dt.date <= end_date)
+].copy()
+
+if DF.empty:
+    st.warning("Không có dữ liệu trong kỳ đã chọn.")
+    st.stop()
+
+
+# ============================================================
+# 20. PHÂN TÍCH NPP TRÙNG ĐỊA CHỈ
+# ============================================================
+
+ADDRESS_DATA = DF[
+    DF["_address_norm"].ne("")
+].copy()
+
+ADDRESS_PAIRS = ADDRESS_DATA[
+    ["_customer_key", "_customer_name", "_address", "_address_norm"]
+].drop_duplicates(
+    subset=["_customer_key", "_address_norm"]
+)
+
+if not ADDRESS_PAIRS.empty:
+
+    ADDRESS_GROUP = (
+        ADDRESS_PAIRS.groupby("_address_norm")
+        .agg(
+            Dia_diem=("_address", "first"),
+            So_NPP=("_customer_key", "nunique"),
+            Danh_sach_NPP=("_customer_name", unique_join)
+        )
+        .reset_index()
+    )
+
+    ADDRESS_GROUP = ADDRESS_GROUP[
+        ADDRESS_GROUP["So_NPP"] >= 2
+    ].sort_values(
+        "So_NPP",
+        ascending=False
+    )
+
+    address_count_map = (
+        ADDRESS_GROUP.set_index("_address_norm")["So_NPP"]
+    )
+
+    ADDRESS_PAIRS["_address_npp_count"] = (
+        ADDRESS_PAIRS["_address_norm"]
+        .map(address_count_map)
+        .fillna(1)
+    )
+
+    CUSTOMER_ADDRESS_MAX = (
+        ADDRESS_PAIRS.groupby("_customer_key")
+        ["_address_npp_count"].max()
+    )
+
+else:
+    ADDRESS_GROUP = pd.DataFrame()
+    CUSTOMER_ADDRESS_MAX = pd.Series(dtype=float)
+
+
+# ============================================================
+# 21. MỘT XE - NHIỀU NPP - CÙNG NGÀY
+# ============================================================
+
+VEHICLE_DATA = CUSTOMER_CAR[
+    CUSTOMER_CAR["_vehicle_norm"].ne("")
+].copy()
+
+if not VEHICLE_DATA.empty:
+
+    VEHICLE_DAY_ALL = (
+        VEHICLE_DATA.groupby(
+            ["_vehicle_norm", "_date_only"]
+        )
+        .agg(
+            Bien_so=("_vehicle_raw", "first"),
+            So_NPP=("_customer_key", "nunique"),
+            Danh_sach_NPP=("_customer_name", unique_join),
+            So_dia_diem=("_address_norm", "nunique"),
+            So_kho=("_warehouse_code", "nunique"),
+            So_giao_dich=("_customer_name", "size"),
+            Doanh_thu=("_revenue", "sum"),
+            San_luong=("_quantity", "sum"),
+            Khoi_luong=("_weight", "sum")
+        )
+        .reset_index()
+    )
+
+    VEHICLE_DAY = VEHICLE_DAY_ALL[
+        VEHICLE_DAY_ALL["So_NPP"] >= 2
+    ].copy()
+
+    per_day_customer = VEHICLE_DATA.merge(
+        VEHICLE_DAY_ALL[
+            ["_vehicle_norm", "_date_only", "So_NPP"]
+        ],
+        on=["_vehicle_norm", "_date_only"],
+        how="left"
+    )
+
+    CUSTOMER_VEHICLE_DAY_MAX = (
+        per_day_customer.groupby("_customer_key")["So_NPP"]
+        .max()
+    )
+
+else:
+    VEHICLE_DAY_ALL = pd.DataFrame()
+    VEHICLE_DAY = pd.DataFrame()
+    CUSTOMER_VEHICLE_DAY_MAX = pd.Series(dtype=float)
+
+
+# ============================================================
+# 22. MỘT XE - NHIỀU NPP - NHIỀU NGÀY
+# ============================================================
+
+if not VEHICLE_DATA.empty:
+
+    VEHICLE_PERIOD_ALL = (
+        VEHICLE_DATA.groupby("_vehicle_norm")
+        .agg(
+            Bien_so=("_vehicle_raw", "first"),
+            So_NPP=("_customer_key", "nunique"),
+            Danh_sach_NPP=("_customer_name", unique_join),
+            So_ngay_hoat_dong=("_date_only", "nunique"),
+            So_dia_diem=("_address_norm", "nunique"),
+            So_kho=("_warehouse_code", "nunique"),
+            So_giao_dich=("_customer_name", "size"),
+            Doanh_thu=("_revenue", "sum"),
+            San_luong=("_quantity", "sum"),
+            Khoi_luong=("_weight", "sum")
+        )
+        .reset_index()
+    )
+
+    VEHICLE_PERIOD = VEHICLE_PERIOD_ALL[
+        VEHICLE_PERIOD_ALL["So_NPP"] >= 2
+    ].sort_values(
+        ["So_NPP", "So_ngay_hoat_dong"],
+        ascending=False
+    )
+
+    per_vehicle_customer = VEHICLE_DATA.merge(
+        VEHICLE_PERIOD_ALL[
+            ["_vehicle_norm", "So_NPP"]
+        ],
+        on="_vehicle_norm",
+        how="left"
+    )
+
+    CUSTOMER_VEHICLE_PERIOD_MAX = (
+        per_vehicle_customer.groupby("_customer_key")["So_NPP"]
+        .max()
+    )
+
+else:
+    VEHICLE_PERIOD_ALL = pd.DataFrame()
+    VEHICLE_PERIOD = pd.DataFrame()
+    CUSTOMER_VEHICLE_PERIOD_MAX = pd.Series(dtype=float)
+
+
+# ============================================================
+# 23. MỘT NPP - NHIỀU KHO TRONG CÙNG NGÀY
+# ============================================================
+
+if not CUSTOMER_CAR.empty:
+
+    warehouse_daily = (
+        CUSTOMER_CAR[
+            CUSTOMER_CAR["_warehouse_code"].ne("")
+        ]
+        .groupby(["_customer_key", "_date_only"])
+        ["_warehouse_code"]
+        .nunique()
+    )
+
+    CUSTOMER_MULTI_WAREHOUSE_MAX = (
+        warehouse_daily.groupby("_customer_key").max()
+    )
+
+else:
+    CUSTOMER_MULTI_WAREHOUSE_MAX = pd.Series(dtype=float)
+
+
+# ============================================================
+# 24. TẦN SUẤT LẤY HÀNG
+# ============================================================
+
+if not CUSTOMER_CAR.empty:
+
+    if document_col:
+        DAILY_ACTIVITY = (
+            CUSTOMER_CAR.groupby(
+                ["_customer_key", "_customer_name", "_date_only"]
+            )[document_col]
+            .nunique()
+            .reset_index(name="So_chung_tu_ngay")
+        )
+
+    else:
+        DAILY_ACTIVITY = (
+            CUSTOMER_CAR.groupby(
+                ["_customer_key", "_customer_name", "_date_only"]
+            )
+            .size()
+            .reset_index(name="So_chung_tu_ngay")
+        )
+
+    CUSTOMER_DAILY_MAX = (
+        DAILY_ACTIVITY.groupby("_customer_key")
+        ["So_chung_tu_ngay"].max()
+    )
+
+else:
+    DAILY_ACTIVITY = pd.DataFrame()
+    CUSTOMER_DAILY_MAX = pd.Series(dtype=float)
+
+
+# ============================================================
+# 25. PHÁT HIỆN CHỨNG TỪ / DÒNG HÀNG TRÙNG
+# ============================================================
+
+duplicate_keys = [
+    "_customer_key",
+    "_date_only"
+]
+
+if document_col:
+    duplicate_keys.append(document_col)
+
+if item_code_col:
+    duplicate_keys.append(item_code_col)
+elif item_name_col:
+    duplicate_keys.append(item_name_col)
+
+duplicate_keys += [
+    "_quantity",
+    "_revenue"
+]
+
+if document_col:
+    DUPLICATE_ROWS = DF[
+        DF.duplicated(
+            subset=duplicate_keys,
+            keep=False
+        )
+    ].copy()
+
+else:
+    DUPLICATE_ROWS = DF.iloc[0:0].copy()
+
+if not DUPLICATE_ROWS.empty:
+    CUSTOMER_DUPLICATE_COUNT = (
+        DUPLICATE_ROWS.groupby("_customer_key").size()
+    )
+else:
+    CUSTOMER_DUPLICATE_COUNT = pd.Series(dtype=float)
+
+
+# ============================================================
+# 26. BẤT THƯỜNG SẢN LƯỢNG THEO THÁNG
+# ============================================================
+
+MONTHLY_CUSTOMER = (
+    DF.groupby(["_customer_key", "_month"])
+    .agg(
+        Doanh_thu=("_revenue", "sum"),
+        San_luong=("_quantity", "sum"),
+        Khoi_luong=("_weight", "sum")
+    )
+    .reset_index()
+)
+
+SPIKE_CUSTOMERS = set()
+SPIKE_DETAILS = []
+
+for customer_key, group in MONTHLY_CUSTOMER.groupby("_customer_key"):
+
+    group = group.sort_values("_month")
+
+    if len(group) < 4:
+        continue
+
+    quantities = group["San_luong"].astype(float)
+
+    for i in range(3, len(group)):
+
+        history = quantities.iloc[:i]
+        current = quantities.iloc[i]
+
+        baseline = history[history > 0].median()
+
+        if baseline <= 0:
+            continue
+
+        if current >= 3 * baseline and current > 0:
+
+            SPIKE_CUSTOMERS.add(customer_key)
+
+            SPIKE_DETAILS.append({
+                "Mã NPP": customer_key,
+                "Tháng": group.iloc[i]["_month"],
+                "Sản lượng tháng": current,
+                "Trung vị các tháng trước": baseline,
+                "Lần mức bình thường": current / baseline
+            })
+
+SPIKE_TABLE = pd.DataFrame(SPIKE_DETAILS)
+
+
+# ============================================================
+# 27. TỔNG HỢP THÔNG TIN TỪNG NPP
+# ============================================================
+
+CUSTOMER_SUMMARY = (
+    DF.groupby("_customer_key")
+    .agg(
+        NPP=("_customer_name", "first"),
+        Doanh_thu=("_revenue", "sum"),
+        San_luong=("_quantity", "sum"),
+        Khoi_luong=("_weight", "sum"),
+        So_ngay_mua=("_date_only", "nunique"),
+        So_giao_dich=("_customer_name", "size"),
+        Dia_diem=("_address", "first"),
+        Ti_le_thieu_dia_diem=(
+            "_address_norm",
+            lambda x: (x == "").mean()
+        )
+    )
+    .reset_index()
+)
+
+CUSTOMER_SUMMARY["So_NPP_cung_dia_diem"] = (
+    CUSTOMER_SUMMARY["_customer_key"]
+    .map(CUSTOMER_ADDRESS_MAX)
+    .fillna(1)
+)
+
+CUSTOMER_SUMMARY["So_NPP_cung_xe_cung_ngay"] = (
+    CUSTOMER_SUMMARY["_customer_key"]
+    .map(CUSTOMER_VEHICLE_DAY_MAX)
+    .fillna(1)
+)
+
+CUSTOMER_SUMMARY["So_NPP_cung_xe_trong_ky"] = (
+    CUSTOMER_SUMMARY["_customer_key"]
+    .map(CUSTOMER_VEHICLE_PERIOD_MAX)
+    .fillna(1)
+)
+
+CUSTOMER_SUMMARY["So_kho_max_cung_ngay"] = (
+    CUSTOMER_SUMMARY["_customer_key"]
+    .map(CUSTOMER_MULTI_WAREHOUSE_MAX)
+    .fillna(1)
+)
+
+CUSTOMER_SUMMARY["Max_chung_tu_ngay"] = (
+    CUSTOMER_SUMMARY["_customer_key"]
+    .map(CUSTOMER_DAILY_MAX)
+    .fillna(0)
+)
+
+CUSTOMER_SUMMARY["So_dong_trung"] = (
+    CUSTOMER_SUMMARY["_customer_key"]
+    .map(CUSTOMER_DUPLICATE_COUNT)
+    .fillna(0)
+)
+
+CUSTOMER_SUMMARY["Bien_dong_san_luong"] = (
+    CUSTOMER_SUMMARY["_customer_key"].isin(SPIKE_CUSTOMERS)
+)
+
+
+# ============================================================
+# 28. RỦI RO KHO - CHỈ XÉT XE KHÁCH HÀNG
+# ============================================================
+
+if not CUSTOMER_CAR.empty:
+
+    WAREHOUSE_SUMMARY = (
+        CUSTOMER_CAR.groupby("_customer_key")
+        .agg(
+            So_dong_xe_kh=("_customer_name", "size"),
+            So_kho_ngoai_danh_sach=(
+                "_warehouse_status",
+                lambda x: (x == "Ngoài danh sách").sum()
+            ),
+            So_kho_trong_danh_sach=(
+                "_warehouse_status",
+                lambda x: (x == "Trong danh sách").sum()
+            ),
+            So_dong_thieu_ma_kho=(
+                "_warehouse_status",
+                lambda x: (x == "Thiếu mã kho").sum()
+            ),
+            So_dong_chua_xac_dinh=(
+                "_warehouse_status",
+                lambda x: x.isin([
+                    "Chưa xác định vùng",
+                    "Thiếu địa điểm",
+                    "Chưa cấu hình danh sách kho"
+                ]).sum()
+            )
+        )
+        .reset_index()
+    )
+
+    CUSTOMER_SUMMARY = CUSTOMER_SUMMARY.merge(
+        WAREHOUSE_SUMMARY,
+        on="_customer_key",
+        how="left"
+    )
+
+else:
+
+    for col in [
+        "So_dong_xe_kh",
+        "So_kho_ngoai_danh_sach",
+        "So_kho_trong_danh_sach",
+        "So_dong_thieu_ma_kho",
+        "So_dong_chua_xac_dinh"
+    ]:
+        CUSTOMER_SUMMARY[col] = 0
+
+CUSTOMER_SUMMARY = CUSTOMER_SUMMARY.fillna(0)
+
+CUSTOMER_SUMMARY["Ti_le_kho_ngoai_danh_sach"] = (
+    CUSTOMER_SUMMARY["So_kho_ngoai_danh_sach"]
+    /
+    (
+        CUSTOMER_SUMMARY["So_kho_ngoai_danh_sach"]
+        + CUSTOMER_SUMMARY["So_kho_trong_danh_sach"]
+    ).replace(0, np.nan)
+).fillna(0)
+
+
+# ============================================================
+# 29. CHẤM ĐIỂM RỦI RO
+# Tổng điểm tối đa: 100
+#
+# 1. Kho ngoài danh sách: 25
+# 2. Địa chỉ nhiều NPP: 20
+# 3. Xe nhiều NPP cùng ngày: 20
+# 4. Xe nhiều NPP trong kỳ: 15
+# 5. Tần suất lấy hàng/ngày: 5
+# 6. NPP nhiều kho cùng ngày: 5
+# 7. Sản lượng đột biến: 5
+# 8. Dòng giao dịch trùng: 3
+# 9. Thiếu địa điểm: 2
+# ============================================================
+
+def score_warehouse(row):
+
+    checked = (
+        row["So_kho_ngoai_danh_sach"]
+        + row["So_kho_trong_danh_sach"]
+    )
+
+    if checked == 0:
+        return 0
+
+    ratio = row["Ti_le_kho_ngoai_danh_sach"]
+
+    if ratio >= 0.50:
+        return 25
+
+    if ratio >= 0.20:
+        return 18
+
+    if ratio > 0:
+        return 10
+
+    return 0
+
+
+def score_address(n):
+    if n >= 4:
+        return 20
+    if n == 3:
+        return 16
+    if n == 2:
+        return 10
+    return 0
+
+
+def score_vehicle_day(n):
+    if n >= 4:
+        return 20
+    if n == 3:
+        return 16
+    if n == 2:
+        return 10
+    return 0
+
+
+def score_vehicle_period(n):
+    if n >= 4:
+        return 15
+    if n == 3:
+        return 12
+    if n == 2:
+        return 8
+    return 0
+
+
+def score_daily_frequency(n):
+    if n >= daily_threshold * 2:
+        return 5
+    if n >= daily_threshold:
+        return 3
+    return 0
+
+
+def score_multi_warehouse(n):
+    if n >= 3:
+        return 5
+    if n == 2:
+        return 3
+    return 0
+
+
+def score_duplicate(n):
+    if n >= 5:
+        return 3
+    if n > 0:
+        return 1
+    return 0
+
+
+CUSTOMER_SUMMARY["Diem_kho"] = CUSTOMER_SUMMARY.apply(
+    score_warehouse,
+    axis=1
+)
+
+CUSTOMER_SUMMARY["Diem_dia_diem"] = (
+    CUSTOMER_SUMMARY["So_NPP_cung_dia_diem"]
+    .apply(score_address)
+)
+
+CUSTOMER_SUMMARY["Diem_xe_cung_ngay"] = (
+    CUSTOMER_SUMMARY["So_NPP_cung_xe_cung_ngay"]
+    .apply(score_vehicle_day)
+)
+
+CUSTOMER_SUMMARY["Diem_xe_trong_ky"] = (
+    CUSTOMER_SUMMARY["So_NPP_cung_xe_trong_ky"]
+    .apply(score_vehicle_period)
+)
+
+CUSTOMER_SUMMARY["Diem_tan_suat"] = (
+    CUSTOMER_SUMMARY["Max_chung_tu_ngay"]
+    .apply(score_daily_frequency)
+)
+
+CUSTOMER_SUMMARY["Diem_nhieu_kho"] = (
+    CUSTOMER_SUMMARY["So_kho_max_cung_ngay"]
+    .apply(score_multi_warehouse)
+)
+
+CUSTOMER_SUMMARY["Diem_dot_bien_san_luong"] = np.where(
+    CUSTOMER_SUMMARY["Bien_dong_san_luong"],
+    5,
+    0
+)
+
+CUSTOMER_SUMMARY["Diem_chung_tu_trung"] = (
+    CUSTOMER_SUMMARY["So_dong_trung"]
+    .apply(score_duplicate)
+)
+
+CUSTOMER_SUMMARY["Diem_thieu_dia_diem"] = np.where(
+    CUSTOMER_SUMMARY["Ti_le_thieu_dia_diem"] >= 0.25,
+    2,
+    0
+)
+
+SCORE_COLS = [
+    "Diem_kho",
+    "Diem_dia_diem",
+    "Diem_xe_cung_ngay",
+    "Diem_xe_trong_ky",
+    "Diem_tan_suat",
+    "Diem_nhieu_kho",
+    "Diem_dot_bien_san_luong",
+    "Diem_chung_tu_trung",
+    "Diem_thieu_dia_diem"
+]
+
+CUSTOMER_SUMMARY["Tong_diem"] = (
+    CUSTOMER_SUMMARY[SCORE_COLS].sum(axis=1)
+).clip(0, 100)
+
+CUSTOMER_SUMMARY["Muc_do"] = (
+    CUSTOMER_SUMMARY["Tong_diem"]
+    .apply(risk_level)
+)
+
+
+# ============================================================
+# 30. NHẬN ĐỊNH VÀ GIẢI PHÁP
+# ============================================================
+
+def make_reasons(row):
+
+    reasons = []
+
+    if row["Diem_kho"] > 0:
+        reasons.append(
+            f"Có {int(row['So_kho_ngoai_danh_sach'])} giao dịch "
+            "lấy hàng tại kho ngoài danh sách vùng."
+        )
+
+    if row["Diem_dia_diem"] > 0:
+        reasons.append(
+            f"Địa điểm có liên quan {int(row['So_NPP_cung_dia_diem'])} NPP."
+        )
+
+    if row["Diem_xe_cung_ngay"] > 0:
+        reasons.append(
+            f"Một xe phục vụ tối đa "
+            f"{int(row['So_NPP_cung_xe_cung_ngay'])} NPP trong cùng ngày."
+        )
+
+    if row["Diem_xe_trong_ky"] > 0:
+        reasons.append(
+            f"Một xe được sử dụng bởi tối đa "
+            f"{int(row['So_NPP_cung_xe_trong_ky'])} NPP trong kỳ."
+        )
+
+    if row["Diem_tan_suat"] > 0:
+        reasons.append(
+            f"Tần suất cao nhất {int(row['Max_chung_tu_ngay'])} "
+            "chứng từ/ngày."
+        )
+
+    if row["Diem_nhieu_kho"] > 0:
+        reasons.append(
+            f"NPP sử dụng {int(row['So_kho_max_cung_ngay'])} kho "
+            "trong cùng ngày."
+        )
+
+    if row["Diem_dot_bien_san_luong"] > 0:
+        reasons.append(
+            "Sản lượng có tháng tăng đột biến so với các tháng trước."
+        )
+
+    if row["Diem_chung_tu_trung"] > 0:
+        reasons.append(
+            f"Có {int(row['So_dong_trung'])} dòng dữ liệu "
+            "có dấu hiệu trùng."
+        )
+
+    if row["Diem_thieu_dia_diem"] > 0:
+        reasons.append("Thiếu thông tin địa điểm ở một số giao dịch.")
+
+    if not reasons:
+        return "Chưa phát hiện dấu hiệu bất thường theo các tiêu chí hiện tại."
+
+    return " ".join(reasons)
+
+
+def make_action(row):
+
+    actions = []
+
+    if row["Diem_kho"] > 0:
+        actions.append(
+            "Đối chiếu phiếu xuất kho, xác minh lý do lấy hàng "
+            "ngoài danh sách kho vùng, kiểm tra phê duyệt ngoại lệ."
+        )
+
+    if row["Diem_dia_diem"] > 0:
+        actions.append(
+            "Kiểm tra hồ sơ pháp lý, địa điểm kinh doanh thực tế, "
+            "người đại diện và thông tin liên hệ của các NPP."
+        )
+
+    if row["Diem_xe_cung_ngay"] > 0 or row["Diem_xe_trong_ky"] > 0:
+        actions.append(
+            "Đối chiếu biển số, người lái xe, phiếu xuất kho, "
+            "thời gian nhận hàng và xác minh thỏa thuận dùng chung xe."
+        )
+
+    if row["Diem_tan_suat"] > 0:
+        actions.append(
+            "Kiểm tra nhiều phiếu lấy hàng trong ngày, số lần chia nhỏ "
+            "đơn và tính phù hợp với nhu cầu kinh doanh."
+        )
+
+    if row["Diem_nhieu_kho"] > 0:
+        actions.append(
+            "Xác minh nguyên nhân lấy hàng tại nhiều kho trong cùng ngày "
+            "và kiểm tra chứng từ điều chuyển hoặc phê duyệt."
+        )
+
+    if row["Diem_dot_bien_san_luong"] > 0:
+        actions.append(
+            "Đối chiếu đơn đặt hàng, sản lượng giao nhận, khả năng "
+            "tiêu thụ và tồn kho của NPP."
+        )
+
+    if row["Diem_chung_tu_trung"] > 0:
+        actions.append(
+            "Kiểm tra số chứng từ gốc, dòng hàng, phiếu xuất kho "
+            "và dữ liệu ghi nhận trùng."
+        )
+
+    if row["Diem_thieu_dia_diem"] > 0:
+        actions.append(
+            "Yêu cầu bổ sung địa điểm khách hàng và cập nhật hồ sơ."
+        )
+
+    if not actions:
+        return (
+            "Tiếp tục giám sát định kỳ, duy trì kiểm tra theo mẫu."
+        )
+
+    return " ".join(actions)
+
+
+CUSTOMER_SUMMARY["Nhan_dinh"] = (
+    CUSTOMER_SUMMARY.apply(make_reasons, axis=1)
+)
+
+CUSTOMER_SUMMARY["Giai_phap"] = (
+    CUSTOMER_SUMMARY.apply(make_action, axis=1)
+)
+
+CUSTOMER_SUMMARY = CUSTOMER_SUMMARY.sort_values(
+    "Tong_diem",
+    ascending=False
+)
+
+
+# ============================================================
+# 31. BẢNG TỔNG HỢP KHO
+# ============================================================
+
+if not CUSTOMER_CAR.empty:
+
+    CUSTOMER_CAR["_region"] = CUSTOMER_CAR["_address"].apply(
+        lambda x: detect_region(x, region_aliases)
+    )
+
+    WAREHOUSE_EVIDENCE = CUSTOMER_CAR.copy()
+
+    WAREHOUSE_SUMMARY = (
+        WAREHOUSE_EVIDENCE.groupby(
+            ["_region", "_warehouse_code", "_warehouse_status"]
+        )
+        .agg(
+            So_giao_dich=("_customer_name", "size"),
+            So_NPP=("_customer_key", "nunique"),
+            Doanh_thu=("_revenue", "sum"),
+            San_luong=("_quantity", "sum"),
+            Khoi_luong=("_weight", "sum")
+        )
+        .reset_index()
+    )
+
+else:
+    WAREHOUSE_EVIDENCE = pd.DataFrame()
+    WAREHOUSE_SUMMARY = pd.DataFrame()
+
+
+# ============================================================
+# 32. BẢNG SẢN PHẨM
+# ============================================================
+
+PRODUCT_GROUP_COL = (
+    item_name_col
+    if item_name_col
+    else item_code_col
+)
+
+if PRODUCT_GROUP_COL:
+
+    PRODUCT_SUMMARY = (
+        DF.groupby(PRODUCT_GROUP_COL)
+        .agg(
+            Doanh_thu=("_revenue", "sum"),
+            San_luong=("_quantity", "sum"),
+            Khoi_luong=("_weight", "sum"),
+            So_NPP=("_customer_key", "nunique"),
+            So_giao_dich=("_customer_name", "size")
+        )
+        .reset_index()
+        .sort_values("San_luong", ascending=False)
+    )
+
+else:
+    PRODUCT_SUMMARY = pd.DataFrame()
+
+
+# ============================================================
+# 33. KPI TỔNG QUAN
+# ============================================================
+
+TOTAL_REVENUE = DF["_revenue"].sum()
+TOTAL_QTY = DF["_quantity"].sum()
+TOTAL_WEIGHT = DF["_weight"].sum()
+
+N_CUSTOMER = DF["_customer_key"].nunique()
+N_DOCUMENT = (
+    DF[document_col].nunique()
+    if document_col else len(DF)
+)
+
+N_CUSTOMER_CAR = CUSTOMER_CAR["_customer_key"].nunique()
+N_VEHICLE = VEHICLE_DATA["_vehicle_norm"].nunique()
+
+N_DUP_ADDRESS = (
+    len(ADDRESS_GROUP)
+    if not ADDRESS_GROUP.empty else 0
+)
+
+N_VEHICLE_DAY = (
+    len(VEHICLE_DAY)
+    if not VEHICLE_DAY.empty else 0
+)
+
+N_VEHICLE_PERIOD = (
+    len(VEHICLE_PERIOD)
+    if not VEHICLE_PERIOD.empty else 0
+)
+
+N_HIGH = CUSTOMER_SUMMARY["Muc_do"].isin(
+    ["Cao", "Rất cao"]
+).sum()
+
+N_VERY_HIGH = (
+    CUSTOMER_SUMMARY["Muc_do"] == "Rất cao"
+).sum()
+
+N_WAREHOUSE_OUTSIDE = (
+    (CUSTOMER_CAR["_warehouse_status"] == "Ngoài danh sách").sum()
+    if not CUSTOMER_CAR.empty else 0
+)
+
+
+# ============================================================
+# 34. HIỂN THỊ TỔNG QUAN
+# ============================================================
+
+st.markdown("---")
+
+st.markdown(
+    '<div class="section-title">TỔNG QUAN HOẠT ĐỘNG NPP</div>',
+    unsafe_allow_html=True
+)
+
+k1, k2, k3, k4, k5, k6 = st.columns(6)
+
+k1.metric("Số NPP", f"{N_CUSTOMER:,}")
+k2.metric("Doanh thu", format_number(TOTAL_REVENUE))
+k3.metric("Sản lượng", format_number(TOTAL_QTY))
+k4.metric("Khối lượng", format_number(TOTAL_WEIGHT))
+k5.metric("Xe khách hàng", f"{N_VEHICLE:,}")
+k6.metric("NPP rủi ro cao", f"{N_HIGH:,}")
+
+
+st.caption(
+    f"Đã loại {removed_z:,} dòng mã hàng đầu Z; "
+    f"{removed_discount:,} dòng hàng chiết khấu; "
+    f"{removed_returns:,} dòng trả hàng/hủy/số âm."
+)
+
+st.markdown("---")
+
+
+# ============================================================
+# 35. CÁC TAB PHÂN TÍCH
+# ============================================================
+
+T1, T2, T3, T4, T5, T6, T7 = st.tabs([
+    "📊 Tổng quan rủi ro",
+    "🏭 Kho lấy hàng",
+    "📍 Địa chỉ NPP",
+    "🚚 Xe khách hàng",
+    "📦 Doanh thu & mặt hàng",
+    "⚠️ Điểm rủi ro NPP",
+    "📋 Xuất bằng chứng"
 ])
 
-# ═══════════════════════════════════════════════════════════════
-#  TAB 1 – SẢN PHẨM & DỰ ÁN
-# ═══════════════════════════════════════════════════════════════
+
+# ============================================================
+# TAB 1 - TỔNG QUAN RỦI RO
+# ============================================================
+
 with T1:
-    # ── Loại hình công trình
-    sh("📋 Loại hình công trình")
-    if "Loại hình kinh doanh" in BAN.columns:
-        dloai=(BAN.groupby("Loại hình kinh doanh")
-               .agg(DT=("Thành tiền bán","sum"),KL=("Khối lượng",lambda x:x.sum()/1000))
-               .reset_index().sort_values("DT",ascending=False))
-        c1,c2=st.columns([1.6,1])
-        with c1:
-            fig=px.bar(dloai,y="Loại hình kinh doanh",x="DT",orientation="h",
-                       color="DT",color_continuous_scale=[[0,"#0d1f3a"],[1,"#388bfd"]],
-                       text=dloai["DT"].apply(f),labels={"DT":"Doanh thu","Loại hình kinh doanh":""})
-            fig.update_traces(textposition="outside",textfont_size=10)
-            fig.update_layout(coloraxis_showscale=False,yaxis=dict(autorange="reversed"))
-            pl(fig,"Doanh thu theo Loại hình Công trình",h=280)
-            st.plotly_chart(fig,use_container_width=True)
-        with c2:
-            fig2=px.pie(dloai,names="Loại hình kinh doanh",values="DT",
-                        hole=0.55,color_discrete_sequence=C)
-            fig2.update_traces(textposition="inside",textinfo="percent",textfont_size=11)
-            pl(fig2,"Tỷ trọng",h=280); st.plotly_chart(fig2,use_container_width=True)
 
-    # ── Top dự án
-    sh("🏆 Top dự án (Số ĐH)")
-    if "Số ĐH" in BAN.columns:
-        dda=(BAN.groupby("Số ĐH")
-             .agg(KH=("Tên khách hàng","first"),
-                  Loai=("Loại hình kinh doanh","first") if "Loại hình kinh doanh" in BAN.columns else ("Tên khách hàng","first"),
-                  DT=("Thành tiền bán","sum"),LN=("Lợi nhuận","sum"),
-                  KL=("Khối lượng",lambda x:round(x.sum()/1000,1)),
-                  NSP=("Tên hàng","nunique") if "Tên hàng" in BAN.columns else ("Thành tiền bán","count"),
-                  Nbd=("Ngày chứng từ","min"),Nkt=("Ngày chứng từ","max"))
-             .reset_index())
-        dda["Bien"]=(dda["LN"]/dda["DT"].replace(0,np.nan)*100).round(1).fillna(0)
-        dda["Tgian"]=(dda["Nkt"]-dda["Nbd"]).dt.days.apply(lambda x:f"{x}d")
-        dda=dda.sort_values("DT",ascending=False)
-        top=st.slider("Số dự án hiển thị",5,30,15,key="sl1")
-        dtop=dda.head(top)
+    st.markdown(
+        '<div class="section-title">PHÂN BỐ MỨC ĐỘ RỦI RO</div>',
+        unsafe_allow_html=True
+    )
 
-        fig3=px.bar(dtop,x="Số ĐH",y="DT",color="Bien",
-                    color_continuous_scale="RdYlGn",
-                    hover_data={"KH":True,"Loai":True,"KL":True,"Bien":True,"Tgian":True},
-                    labels={"DT":"Doanh thu","Bien":"Biên LN%"})
-        fig3.update_layout(xaxis_tickangle=-35,xaxis_tickfont_size=8,coloraxis_colorbar_thickness=12)
-        pl(fig3,f"Top {top} dự án – DT (màu = Biên LN%)",h=360)
-        st.plotly_chart(fig3,use_container_width=True)
+    risk_distribution = (
+        CUSTOMER_SUMMARY["Muc_do"]
+        .value_counts()
+        .reindex(RISK_ORDER, fill_value=0)
+        .rename_axis("Muc_do")
+        .reset_index(name="So_NPP")
+    )
 
-        sc=["Số ĐH","KH","Loai","DT","LN","Bien","KL","NSP","Tgian"]
-        sc=[c for c in sc if c in dtop.columns]
-        ds=dtop[sc].copy(); ds["DT"]=ds["DT"].apply(f); ds["LN"]=ds["LN"].apply(f)
-        st.dataframe(ds.rename(columns={"KH":"Khách hàng","Loai":"Loại hình","Bien":"Biên%",
-                                         "KL":"KL(tấn)","NSP":"#SP","Tgian":"Thời gian"}),
-                     use_container_width=True,hide_index=True)
+    fig = px.bar(
+        risk_distribution,
+        x="Muc_do",
+        y="So_NPP",
+        color="Muc_do",
+        text="So_NPP",
+        color_discrete_map=RISK_COLORS
+    )
 
-    # ── SP & heatmap
-    sh("📦 Mặt hàng quan trọng & Thời điểm mua")
-    c1,c2=st.columns(2)
-    with c1:
-        if "Tên hàng" in BAN.columns:
-            dsp=(BAN.groupby("Tên hàng")
-                 .agg(KL=("Khối lượng",lambda x:round(x.sum()/1000,1)),DT=("Thành tiền bán","sum"))
-                 .reset_index().sort_values("KL",ascending=False).head(12))
-            fig4=px.bar(dsp,y="Tên hàng",x="KL",orientation="h",color="KL",
-                        color_continuous_scale=[[0,"#0d1f3a"],[1,"#34d399"]],
-                        text=dsp["KL"].apply(lambda v:f"{v:.0f}T"),labels={"KL":"KL(tấn)","Tên hàng":""})
-            fig4.update_traces(textposition="outside",textfont_size=10)
-            fig4.update_layout(coloraxis_showscale=False,yaxis=dict(autorange="reversed"))
-            pl(fig4,"Top 12 SP – Khối lượng (tấn)",h=360); st.plotly_chart(fig4,use_container_width=True)
-    with c2:
-        dnsp=(BAN.groupby("NSP").agg(DT=("Thành tiền bán","sum"),KL=("Khối lượng",lambda x:x.sum()/1000)).reset_index())
-        fig5=px.pie(dnsp,names="NSP",values="DT",hole=0.5,color_discrete_sequence=C)
-        fig5.update_traces(textposition="inside",textinfo="percent+label",textfont_size=10)
-        pl(fig5,"Tỷ trọng DT theo Nhóm SP",h=360); st.plotly_chart(fig5,use_container_width=True)
+    fig.update_layout(
+        paper_bgcolor="#07111e",
+        plot_bgcolor="#07111e",
+        font_color="#c5d7eb",
+        showlegend=False,
+        height=320
+    )
 
-    # Heatmap
-    if "Tên hàng" in BAN.columns:
-        top8=BAN.groupby("Tên hàng")["Khối lượng"].sum().nlargest(8).index.tolist()
-        dhm=(BAN[BAN["Tên hàng"].isin(top8)]
-             .groupby(["Tên hàng","Thang"])["Khối lượng"].sum()/1000).reset_index()
-        dpiv=dhm.pivot(index="Tên hàng",columns="Thang",values="Khối lượng").fillna(0)
-        if not dpiv.empty:
-            fig6=go.Figure(go.Heatmap(
-                z=dpiv.values,x=list(dpiv.columns),y=list(dpiv.index),
-                colorscale="Blues",hoverongaps=False,
-                text=[[f"{v:.0f}T" for v in row] for row in dpiv.values],
-                texttemplate="%{text}",textfont_size=9))
-            fig6.update_layout(plot_bgcolor=PBG,paper_bgcolor=PBG,font_color=FC,
-                                height=260,margin=dict(l=8,r=8,t=8,b=8),
-                                xaxis_tickfont_size=10,yaxis_tickfont_size=9)
-            st.plotly_chart(fig6,use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
-    # Giao hàng
-    sh("🚚 Địa điểm giao hàng & Phương tiện")
-    c1,c2,c3=st.columns(3)
-    with c1:
-        if "Freight Terms" in BAN.columns:
-            dft=BAN["Freight Terms"].value_counts().reset_index(); dft.columns=["H","N"]
-            fig7=px.pie(dft,names="H",values="N",hole=0.55,color_discrete_sequence=C)
-            fig7.update_traces(textposition="inside",textinfo="percent",textfont_size=10)
-            pl(fig7,"Điều kiện giao hàng",h=240); st.plotly_chart(fig7,use_container_width=True)
-    with c2:
-        if "Shipping method" in BAN.columns:
-            dsm=BAN["Shipping method"].value_counts().reset_index(); dsm.columns=["P","N"]
-            fig8=px.pie(dsm,names="P",values="N",hole=0.55,color_discrete_sequence=C[2:])
-            fig8.update_traces(textposition="inside",textinfo="percent",textfont_size=10)
-            pl(fig8,"Phương tiện VC",h=240); st.plotly_chart(fig8,use_container_width=True)
-    with c3:
-        dtinh=(BAN.groupby("Tinh").agg(KL=("Khối lượng",lambda x:round(x.sum()/1000,1))).reset_index()
-               .sort_values("KL",ascending=False))
-        dtinh=dtinh[dtinh["Tinh"].str.len()>2].head(8)
-        fig9=px.bar(dtinh,x="KL",y="Tinh",orientation="h",
-                    color="KL",color_continuous_scale=[[0,"#0d1f3a"],[1,"#388bfd"]],
-                    text=dtinh["KL"].apply(lambda v:f"{v:.0f}T"),labels={"KL":"KL(tấn)","Tinh":""})
-        fig9.update_traces(textposition="outside",textfont_size=9)
-        fig9.update_layout(coloraxis_showscale=False,yaxis=dict(autorange="reversed"))
-        pl(fig9,"Top 8 Tỉnh/TP – KL(tấn)",h=240); st.plotly_chart(fig9,use_container_width=True)
+    st.markdown(
+        '<div class="section-title">CÁC DẤU HIỆU RỦI RO CHÍNH</div>',
+        unsafe_allow_html=True
+    )
 
-# ═══════════════════════════════════════════════════════════════
-#  TAB 2 – DOANH THU & SẢN LƯỢNG
-# ═══════════════════════════════════════════════════════════════
+    a, b, c, d = st.columns(4)
+
+    a.metric("NPP trùng địa điểm", f"{N_DUP_ADDRESS:,}")
+    b.metric("Xe nhiều NPP cùng ngày", f"{N_VEHICLE_DAY:,}")
+    c.metric("Xe nhiều NPP trong kỳ", f"{N_VEHICLE_PERIOD:,}")
+    d.metric("Lượt xe lấy hàng ngoài danh sách kho", f"{N_WAREHOUSE_OUTSIDE:,}")
+
+    st.markdown(
+        '<div class="section-title">TOP NPP CẦN ƯU TIÊN KIỂM TRA</div>',
+        unsafe_allow_html=True
+    )
+
+    top = CUSTOMER_SUMMARY.head(20)
+
+    st.dataframe(
+        top[[
+            "NPP",
+            "Tong_diem",
+            "Muc_do",
+            "Nhan_dinh",
+            "Giai_phap"
+        ]],
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+# ============================================================
+# TAB 2 - KHO LẤY HÀNG
+# ============================================================
+
 with T2:
-    sh("📈 Biến động theo tháng")
-    dm=(BAN.groupby("Thang")
-        .agg(DT=("Thành tiền bán","sum"),
-             KL=("Khối lượng",lambda x:x.sum()/1000),
-             SL=("Số lượng","sum"),
-             LN=("Lợi nhuận","sum"),
-             NDH=("Số ĐH","nunique") if "Số ĐH" in BAN.columns else ("Thành tiền bán","count"))
-        .reset_index().sort_values("Thang"))
-    dm["Bien"]=(dm["LN"]/dm["DT"].replace(0,np.nan)*100).round(1).fillna(0)
-    dm["KL_d"]=dm["KL"].diff().round(1)
-    dm["KL_mom"]=dm["KL"].pct_change().mul(100).round(1)
 
-    fig=make_subplots(rows=2,cols=1,shared_xaxes=True,
-        subplot_titles=("Doanh thu (VNĐ) & Khối lượng (tấn)","Biên LN (%) & Tăng trưởng KL MoM (%)"),
-        vertical_spacing=0.10,row_heights=[0.6,0.4])
+    st.markdown(
+        '<div class="section-title">ĐỐI CHIẾU ĐỊA ĐIỂM NPP VÀ MÃ KHO</div>',
+        unsafe_allow_html=True
+    )
 
-    fig.add_trace(go.Bar(x=dm["Thang"],y=dm["DT"],name="Doanh thu",
-                          marker_color="#388bfd",opacity=0.85,
-                          text=dm["DT"].apply(f),textposition="outside",textfont_size=9),row=1,col=1)
-    fig.add_trace(go.Scatter(x=dm["Thang"],y=dm["KL"],name="KL (tấn)",
-                              mode="lines+markers",line=dict(color="#34d399",width=2.5),
-                              marker_size=6),row=1,col=1)
-    fig.add_trace(go.Scatter(x=dm["Thang"],y=dm["Bien"],name="Biên LN%",
-                              mode="lines+markers+text",
-                              text=[f"{v:.1f}%" for v in dm["Bien"]],
-                              textposition="top center",textfont_size=9,
-                              line=dict(color="#fbbf24",width=2.5)),row=2,col=1)
-    fig.add_trace(go.Bar(x=dm["Thang"],y=dm["KL_mom"],name="KL MoM%",
-                          marker_color=[("#f87171" if (v or 0)<0 else "#34d399") for v in dm["KL_mom"]],
-                          opacity=0.6),row=2,col=1)
-    fig.update_layout(plot_bgcolor=PBG,paper_bgcolor=PBG,
-                       font=dict(family="Be Vietnam Pro",color=FC,size=11),
-                       height=540,legend=dict(orientation="h",y=-0.06,bgcolor="rgba(0,0,0,0)"),
-                       margin=dict(l=8,r=8,t=34,b=8))
-    for ax in fig.layout:
-        if ax.startswith(("xaxis","yaxis")):
-            fig.layout[ax].update(gridcolor=GR,showline=False)
-    st.plotly_chart(fig,use_container_width=True)
+    st.info(
+        "Chỉ phân tích các giao dịch được phân loại là Xe khách hàng. "
+        "Xe nhà máy và xe thuê ngoài không được đưa vào bảng này."
+    )
 
-    # Tháng đột biến tự động
-    sh("⚡ Phát hiện tháng sản lượng bất thường")
-    mkl=dm["KL"].mean(); skl=dm["KL"].std() or 1
-    found=False
-    for _,r in dm.iterrows():
-        z=(r["KL"]-mkl)/skl; mom=r.get("KL_mom",0) or 0
-        if abs(z)>1.5:
-            cls,ico=("ah","🔺") if z>0 else ("am","🔻")
-            al(cls,f"{ico} <b>{r['Thang']}</b>: KL = <b>{r['KL']:,.0f} tấn</b> "
-               f"(Z={z:+.1f}σ, MoM={mom:+.1f}%) — "
-               f"{'Đột biến tăng → kiểm tra đơn hàng dự án lớn tập trung, rủi ro giao hàng không đủ' if z>0 else 'Sụt giảm mạnh → tiến độ dự án chậm, khách hoãn nhận hàng'}")
-            found=True
-    if not found: al("al","✅ Sản lượng ổn định qua các tháng, không có đột biến.")
+    if WAREHOUSE_EVIDENCE.empty:
 
-    # Quý
-    sh("📊 Tổng hợp theo Quý")
-    dq=(BAN.groupby("Quy")
-        .agg(DT=("Thành tiền bán","sum"),KL=("Khối lượng",lambda x:round(x.sum()/1000,1)),
-             LN=("Lợi nhuận","sum"),
-             NDH=("Số ĐH","nunique") if "Số ĐH" in BAN.columns else ("Thành tiền bán","count"),
-             NKH=("Tên khách hàng","nunique"))
-        .reset_index())
-    dq["Bien"]=(dq["LN"]/dq["DT"].replace(0,np.nan)*100).round(1).fillna(0)
-    c1,c2=st.columns(2)
-    with c1:
-        fq=px.bar(dq,x="Quy",y="DT",color="Bien",color_continuous_scale="RdYlGn",
-                  text=dq["DT"].apply(f),labels={"DT":"Doanh thu","Bien":"Biên LN%","Quy":"Quý"})
-        fq.update_traces(textposition="outside",textfont_size=10)
-        fq.update_layout(coloraxis_colorbar_thickness=12)
-        pl(fq,"Doanh thu theo Quý (màu = Biên LN%)",h=280); st.plotly_chart(fq,use_container_width=True)
-    with c2:
-        dqs=dq.copy(); dqs["DT"]=dqs["DT"].apply(f); dqs["LN"]=dqs["LN"].apply(f)
-        dqs.columns=["Quý","Doanh thu","KL(tấn)","Lợi nhuận","Số ĐH","Số KH","Biên(%)"]
-        st.dataframe(dqs,use_container_width=True,hide_index=True)
+        st.warning("Không có giao dịch xe khách hàng để phân tích kho.")
 
-    # Bảng chi tiết tháng
-    with st.expander("📋 Bảng chi tiết từng tháng"):
-        dms=dm.copy(); dms["DT"]=dms["DT"].apply(f); dms["LN"]=dms["LN"].apply(f)
-        dms=dms.drop(columns=["KL_d","KL_mom"],errors="ignore")
-        dms.columns=["Tháng","Doanh thu","KL(tấn)","SL(cái)","Lợi nhuận","Số ĐH","Biên(%)"]
-        st.dataframe(dms,use_container_width=True,hide_index=True)
+    else:
 
-# ═══════════════════════════════════════════════════════════════
-#  TAB 3 – LỢI NHUẬN & GIÁ
-# ═══════════════════════════════════════════════════════════════
+        st.markdown("### Kết quả đối chiếu")
+
+        warehouse_status_summary = (
+            WAREHOUSE_EVIDENCE["_warehouse_status"]
+            .value_counts()
+            .rename_axis("Trạng thái")
+            .reset_index(name="Số giao dịch")
+        )
+
+        st.dataframe(
+            warehouse_status_summary,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        fig = px.bar(
+            warehouse_status_summary,
+            x="Trạng thái",
+            y="Số giao dịch",
+            color="Trạng thái",
+            text="Số giao dịch"
+        )
+
+        fig.update_layout(
+            paper_bgcolor="#07111e",
+            plot_bgcolor="#07111e",
+            font_color="#c5d7eb",
+            showlegend=False
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("### Giao dịch lấy hàng ngoài danh sách vùng")
+
+        outside = WAREHOUSE_EVIDENCE[
+            WAREHOUSE_EVIDENCE["_warehouse_status"] == "Ngoài danh sách"
+        ].copy()
+
+        if outside.empty:
+
+            st.success("Chưa phát hiện giao dịch ngoài danh sách kho vùng.")
+
+        else:
+
+            st.error(
+                f"Có {len(outside):,} giao dịch cần kiểm tra."
+            )
+
+            st.dataframe(
+                outside[[
+                    "_customer_name",
+                    "_address",
+                    "_region",
+                    "_warehouse_code",
+                    "_vehicle_raw",
+                    "_date",
+                    "_revenue",
+                    "_quantity",
+                    "_weight"
+                ]].rename(columns={
+                    "_customer_name": "NPP",
+                    "_address": "Địa điểm",
+                    "_region": "Vùng",
+                    "_warehouse_code": "Mã kho thực tế",
+                    "_vehicle_raw": "Biển số xe",
+                    "_date": "Ngày",
+                    "_revenue": "Doanh thu",
+                    "_quantity": "Số lượng",
+                    "_weight": "Khối lượng"
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
+
+        st.markdown("### Cách xử lý")
+
+        st.write("""
+        1. Đối chiếu địa điểm NPP với khu vực được cấu hình.
+        2. Kiểm tra mã kho thực tế trên phiếu xuất hàng.
+        3. Xác minh trường hợp lấy hàng ngoài vùng được phép.
+        4. Kiểm tra phê duyệt điều chuyển, xuất hàng khác kho hoặc ngoại lệ.
+        5. Yêu cầu đơn vị kinh doanh giải trình nếu chưa có chứng từ hợp lệ.
+        """)
+
+        st.markdown("### Tổng hợp theo vùng và mã kho")
+
+        st.dataframe(
+            WAREHOUSE_SUMMARY,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        missing_region = WAREHOUSE_EVIDENCE[
+            WAREHOUSE_EVIDENCE["_warehouse_status"].isin([
+                "Chưa xác định vùng",
+                "Thiếu địa điểm"
+            ])
+        ]
+
+        if not missing_region.empty:
+            st.warning(
+                f"Có {len(missing_region):,} giao dịch chưa xác định được vùng. "
+                "Không nên kết luận sai kho đối với các giao dịch này."
+            )
+
+
+# ============================================================
+# TAB 3 - ĐỊA CHỈ NPP
+# ============================================================
+
 with T3:
-    al("ai","📌 <b>Logic giá:</b>&nbsp; GB/cái (VNĐ/cái) × SL = TT Bán &nbsp;|&nbsp; "
-           "GV/kg (VNĐ/kg) × KL = TT Vốn &nbsp;|&nbsp; "
-           "Margin/kg = (TT Bán ÷ KL) − GV/kg")
 
-    # Chart LN theo tháng
-    sh("💹 Doanh thu / Vốn / Lợi nhuận & Biên LN (%) theo tháng")
-    dlnm=(BAN.groupby("Thang")
-          .agg(DT=("Thành tiền bán","sum"),Von=("Thành tiền vốn","sum"),LN=("Lợi nhuận","sum"))
-          .reset_index().sort_values("Thang"))
-    dlnm["Bien"]=(dlnm["LN"]/dlnm["DT"].replace(0,np.nan)*100).round(2).fillna(0)
+    st.markdown(
+        '<div class="section-title">NPP TRÙNG ĐỊA ĐIỂM</div>',
+        unsafe_allow_html=True
+    )
 
-    figln=make_subplots(rows=2,cols=1,shared_xaxes=True,
-        subplot_titles=("DT / Giá vốn / LN (VNĐ)","Biên LN (%)"),
-        vertical_spacing=0.12,row_heights=[0.55,0.45])
-    figln.add_trace(go.Bar(x=dlnm["Thang"],y=dlnm["DT"],name="Doanh thu",marker_color="#388bfd",opacity=0.8),row=1,col=1)
-    figln.add_trace(go.Bar(x=dlnm["Thang"],y=dlnm["Von"],name="Giá vốn",marker_color="#f87171",opacity=0.8),row=1,col=1)
-    figln.add_trace(go.Scatter(x=dlnm["Thang"],y=dlnm["LN"],name="Lợi nhuận",
-                                mode="lines+markers",line=dict(color="#34d399",width=2.5)),row=1,col=1)
-    figln.add_trace(go.Scatter(x=dlnm["Thang"],y=dlnm["Bien"],name="Biên LN%",
-                                mode="lines+markers+text",
-                                text=[f"{v:.1f}%" for v in dlnm["Bien"]],
-                                textposition="top center",textfont_size=9,
-                                line=dict(color="#fbbf24",width=2.5)),row=2,col=1)
-    figln.update_layout(plot_bgcolor=PBG,paper_bgcolor=PBG,
-                         font=dict(family="Be Vietnam Pro",color=FC,size=11),
-                         height=500,barmode="group",
-                         legend=dict(orientation="h",y=-0.07,bgcolor="rgba(0,0,0,0)"),
-                         margin=dict(l=8,r=8,t=34,b=8))
-    for ax in figln.layout:
-        if ax.startswith(("xaxis","yaxis")): figln.layout[ax].update(gridcolor=GR,showline=False)
-    st.plotly_chart(figln,use_container_width=True)
+    if ADDRESS_GROUP.empty:
 
-    # Kỳ bất thường biên LN
-    mb=dlnm["Bien"].mean(); sb=dlnm["Bien"].std() or 1
-    anom_thang=[r for _,r in dlnm.iterrows() if (r["Bien"]-mb)/sb < -1.2]
-    if anom_thang:
-        sh("🔍 Kỳ nghi có chiết khấu / chính sách đặc biệt")
-        for r in anom_thang:
-            z=(r["Bien"]-mb)/sb
-            cls="ah" if z<-1.8 else "am"
-            al(cls,f"{'🔴' if z<-1.8 else '🟡'} <b>{r['Thang']}</b>: Biên LN = <b>{r['Bien']:.1f}%</b> "
-               f"(TB={mb:.1f}%, Z={z:.1f}σ) → Nguyên nhân có thể: chiết khấu hợp đồng dự án lớn, "
-               f"giá đặc biệt cuối quý, hoặc bán kèm SP biên thấp")
+        st.success(
+            "Chưa phát hiện địa điểm được sử dụng bởi từ 2 NPP trở lên."
+        )
 
-    # Margin/kg theo nhóm SP
-    sh("⚙️ So sánh Giá bán/kg vs Giá vốn/kg theo Nhóm SP")
-    dmnsp=(BAN[BAN["Khối lượng"]>0]
-           .groupby("NSP")
-           .agg(GV=("GV_kg","mean"),GB=("GB_kg","mean"),Mgn=("Mgn_kg","mean"),
-                Mpct=("Mgn_pct","mean"))
-           .reset_index().round(0))
-    c1,c2=st.columns(2)
-    with c1:
-        fmg=go.Figure()
-        fmg.add_trace(go.Bar(name="Giá bán/kg",x=dmnsp["NSP"],y=dmnsp["GB"],marker_color="#388bfd",opacity=0.85))
-        fmg.add_trace(go.Bar(name="Giá vốn/kg",x=dmnsp["NSP"],y=dmnsp["GV"],marker_color="#f87171",opacity=0.85))
-        fmg.update_layout(barmode="group")
-        pl(fmg,"GB/kg vs GV/kg theo Nhóm SP",h=300); st.plotly_chart(fmg,use_container_width=True)
-    with c2:
-        fmp=px.bar(dmnsp.sort_values("Mpct",ascending=False),x="NSP",y="Mpct",
-                   color="Mpct",color_continuous_scale="RdYlGn",
-                   text=dmnsp.sort_values("Mpct",ascending=False)["Mpct"].apply(lambda v:f"{v:.0f}%"),
-                   labels={"Mpct":"Margin/kg %","NSP":""})
-        fmp.update_traces(textposition="outside",textfont_size=10)
-        fmp.update_layout(coloraxis_colorbar_thickness=12)
-        pl(fmp,"Margin/kg (%) theo Nhóm SP",h=300); st.plotly_chart(fmp,use_container_width=True)
+    else:
 
-    # Scatter dự án
-    if "Số ĐH" in BAN.columns:
-        sh("🏗️ Scatter Dự án: Doanh thu vs Biên LN%")
-        dld=(BAN.groupby("Số ĐH")
-             .agg(KH=("Tên khách hàng","first"),
-                  DT=("Thành tiền bán","sum"),LN=("Lợi nhuận","sum"),
-                  KL=("Khối lượng",lambda x:round(x.sum()/1000,1)))
-             .reset_index())
-        dld["Bien"]=(dld["LN"]/dld["DT"].replace(0,np.nan)*100).round(1).fillna(0)
-        fsc=px.scatter(dld,x="DT",y="Bien",size="KL",color="Bien",
-                       hover_data={"KH":True,"KL":True},
-                       color_continuous_scale="RdYlGn",
-                       labels={"DT":"Doanh thu","Bien":"Biên LN%","KL":"KL(tấn)"})
-        fsc.add_hline(y=dld["Bien"].mean(),line_dash="dash",line_color="#fbbf24",
-                       annotation_text=f"TB {dld['Bien'].mean():.1f}%",
-                       annotation_font_color="#fbbf24")
-        fsc.add_hline(y=0,line_color="#f87171",line_width=1,
-                       annotation_text="Ngưỡng lỗ",annotation_font_color="#f87171")
-        pl(fsc,"Dự án: DT vs Biên LN% (kích thước = KL tấn)",h=380)
-        st.plotly_chart(fsc,use_container_width=True)
+        st.warning(
+            f"Phát hiện {len(ADDRESS_GROUP):,} địa điểm có từ 2 NPP trở lên."
+        )
 
-# ═══════════════════════════════════════════════════════════════
-#  TAB 4 – RỦI RO & BẤT THƯỜNG (gộp, thang 100)
-# ═══════════════════════════════════════════════════════════════
+        st.dataframe(
+            ADDRESS_GROUP.rename(columns={
+                "Dia_diem": "Địa điểm",
+                "So_NPP": "Số NPP",
+                "Danh_sach_NPP": "Danh sách NPP"
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
+
+    st.markdown(
+        '<div class="section-title">HƯỚNG KIỂM TRA ĐỊA CHỈ</div>',
+        unsafe_allow_html=True
+    )
+
+    st.write("""
+    Một địa điểm có nhiều NPP là dấu hiệu cần xác minh, chưa đủ để kết luận
+    các NPP có cùng chủ sở hữu hoặc thông đồng.
+
+    Kiểm tra thêm:
+
+    - Giấy chứng nhận đăng ký kinh doanh.
+    - Địa chỉ đăng ký và địa điểm hoạt động thực tế.
+    - Người đại diện pháp luật, người liên hệ.
+    - Số điện thoại, email, người nhận hàng.
+    - Kho bãi, cửa hàng và hoạt động kinh doanh thực tế.
+    - Quan hệ giữa các NPP nếu có dấu hiệu liên kết.
+    """)
+
+
+# ============================================================
+# TAB 4 - XE KHÁCH HÀNG
+# ============================================================
+
 with T4:
-    sh("⚠️ Phân tích Rủi ro & Dấu hiệu Bất thường (thang 100)")
-    al("ai","📌 Điểm rủi ro tổng hợp từ 6 nhóm dấu hiệu chính. "
-           "Mỗi nhóm được tính dựa trên số liệu thực tế, có chỉ ra nguyên nhân và bằng chứng cụ thể.")
 
-    tDT_=BAN["Thành tiền bán"].sum()
-    tLN_=BAN["Lợi nhuận"].sum()
-    bien_=(tLN_/tDT_*100) if tDT_ else 0
+    st.markdown(
+        '<div class="section-title">MỘT XE - NHIỀU NPP - CÙNG NGÀY</div>',
+        unsafe_allow_html=True
+    )
 
-    # ── Tính 6 chỉ số rủi ro, mỗi chỉ số max tổng thành 100
-    RISKS=[]  # (tên, điểm/100, level, mô_tả_nguyên_nhân, df_detail)
+    if VEHICLE_DAY.empty:
 
-    # R1 – Biên LN & Giá (30 điểm)
-    # Sub R1a: Biên LN tổng thấp (15đ)
-    r1a=15 if bien_<5 else 9 if bien_<15 else 3 if bien_<25 else 0
-    # Sub R1b: Margin/kg âm (15đ)
-    dlo=BAN[(BAN["Khối lượng"]>0)&(BAN["GB_kg"]>0)&(BAN["Mgn_kg"]<0)]
-    plo=(len(dlo)/len(BAN)*100) if len(BAN) else 0; tlo=abs(dlo["Lợi nhuận"].sum())
-    r1b=min(15,plo*3)
-    r1=r1a+r1b
-    lv1="h" if r1>=20 else "m" if r1>=10 else "l"
-    detail_r1=(f"Biên LN tổng = <b>{bien_:.1f}%</b> {'(rất thấp)' if r1a>=12 else '(thấp)' if r1a>=6 else ''}"
-               f" &nbsp;|&nbsp; Margin/kg âm: <b>{len(dlo)} dòng ({plo:.1f}%)</b> – "
-               f"thiệt hại {f(tlo)} VNĐ.<br>"
-               f"<b>→ Nguyên nhân:</b> Giá bán/cái chiết khấu sâu cho hàng phụ kiện nhỏ (tính theo cái) "
-               f"nhưng giá vốn tính theo kg cao → bán lỗ thực tế khi quy về kg.")
-    dcols1=["Ngày chứng từ","Tên khách hàng","Tên hàng","GB_kg","GV_kg","Mgn_kg","Lợi nhuận"]
-    dcols1=[c for c in dcols1 if c in dlo.columns]
-    RISKS.append(("💹 Biên LN & Margin/kg",30,r1,lv1,detail_r1,
-                  dlo[dcols1].rename(columns={"GB_kg":"GB/kg","GV_kg":"GV/kg","Mgn_kg":"Margin/kg"}) if not dlo.empty else None))
+        st.success(
+            "Chưa phát hiện một xe phục vụ nhiều NPP trong cùng ngày."
+        )
 
-    # R2 – Trả hàng & Hủy đơn (20 điểm)
-    dtra=D2[D2["GD"].isin(["Trả","Nhập lại"])]
-    gt_tra=abs(dtra["Thành tiền bán"].sum()); tl_tra=(gt_tra/tDT_*100) if tDT_ else 0
-    r2=min(20,tl_tra*2)
-    lv2="h" if tl_tra>10 else "m" if tl_tra>3 else "l"
-    detail_r2=(f"<b>{len(dtra)} phiếu</b> trả hàng/hủy đơn – Giá trị: <b>{f(gt_tra)} VNĐ ({tl_tra:.1f}% DT)</b><br>"
-               f"<b>→ Nguyên nhân phổ biến:</b> Khách đặt nhầm item, xuất sai quy cách, "
-               f"chất lượng không đáp ứng yêu cầu công trình (đường kính/áp lực), "
-               f"hoặc thay đổi thiết kế dự án giữa chừng.")
-    dcols2=["Ngày chứng từ","Tên khách hàng","Tên hàng","Khối lượng","Thành tiền bán","Ghi chú"]
-    dcols2=[c for c in dcols2 if c in dtra.columns]
-    RISKS.append(("↩️ Trả hàng & Hủy đơn",20,round(r2,1),lv2,detail_r2,
-                  dtra[dcols2].head(30) if not dtra.empty else None))
+    else:
 
-    # R3 – Giá bán bất thường (20 điểm)
-    # Sub R3a: Z-score giá bán/cái > 2.5σ (10đ)
-    zagb=BAN.get("Z_gb",pd.Series(0,index=BAN.index)).fillna(0)
-    nabn=int((zagb.abs()>2.5).sum()); pabn=(nabn/len(BAN)*100) if len(BAN) else 0
-    r3a=min(10,pabn*3)
-    # Sub R3b: Discount vs TB thị trường >15% (10đ)
-    ddisc=BAN[(BAN.get("Disc",pd.Series(0,index=BAN.index)).fillna(0)>15)&(BAN["GB_cai"]>0)]
-    pdisc=(len(ddisc)/len(BAN)*100) if len(BAN) else 0
-    r3b=min(10,pdisc*1.5)
-    r3=r3a+r3b
-    lv3="h" if r3>=14 else "m" if r3>=6 else "l"
-    detail_r3=(f"Giá bán/cái bất thường (Z>2.5σ): <b>{nabn} dòng ({pabn:.1f}%)</b><br>"
-               f"Giá bán thấp hơn TB thị trường >15%: <b>{len(ddisc)} dòng ({pdisc:.1f}%)</b><br>"
-               f"<b>→ Nguyên nhân:</b> Chiết khấu đặc biệt theo hợp đồng dự án, "
-               f"giá thương lượng cho KH lớn mua số lượng lớn, hoặc sai sót nhập liệu giá bán. "
-               f"Cần đối chiếu với phê duyệt chiết khấu từ cấp quản lý.")
-    dabn=BAN[zagb.abs()>2.5][["Ngày chứng từ","Tên khách hàng","Tên hàng","GB_cai","SP_tb","Disc","Số lượng","Thành tiền bán"]].copy()
-    dabn=dabn.rename(columns={"GB_cai":"GB/cái","SP_tb":"TB thị trường","Disc":"Giảm%"})
-    RISKS.append(("💰 Giá bán bất thường",20,round(r3,1),lv3,detail_r3,
-                  dabn if not dabn.empty else None))
+        st.warning(
+            f"Phát hiện {len(VEHICLE_DAY):,} trường hợp "
+            "một xe phục vụ nhiều NPP trong cùng ngày."
+        )
 
-    # R4 – Giá vốn/kg bất thường (15 điểm)
-    zagv=BAN.get("Z_gv",pd.Series(0,index=BAN.index)).fillna(0)
-    n_gv=int((zagv.abs()>2.5).sum()); p_gv=(n_gv/len(BAN)*100) if len(BAN) else 0
-    r4=min(15,p_gv*4)
-    lv4="h" if r4>=10 else "m" if r4>=4 else "l"
-    detail_r4=(f"Giá vốn/kg bất thường (Z>2.5σ): <b>{n_gv} dòng ({p_gv:.1f}%)</b><br>"
-               f"<b>→ Nguyên nhân:</b> Xuất lô hàng tồn kho cũ nhập giá khác, "
-               f"phân bổ chi phí sản xuất bất thường (lô sản xuất nhỏ tốn phí hơn), "
-               f"hoặc sai sót phân bổ chi phí trong hệ thống ERP.")
-    dgv=BAN[zagv.abs()>2.5][["Ngày chứng từ","Tên khách hàng","Tên hàng","GV_kg","Khối lượng","Thành tiền vốn"]].copy()
-    dgv=dgv.rename(columns={"GV_kg":"GV/kg"})
-    RISKS.append(("🏭 Giá vốn/kg bất thường",15,round(r4,1),lv4,detail_r4,
-                  dgv if not dgv.empty else None))
+        st.dataframe(
+            VEHICLE_DAY.rename(columns={
+                "_date_only": "Ngày",
+                "Bien_so": "Biển số",
+                "So_NPP": "Số NPP",
+                "Danh_sach_NPP": "Danh sách NPP",
+                "So_dia_diem": "Số địa điểm",
+                "So_kho": "Số kho",
+                "So_giao_dich": "Số giao dịch",
+                "Doanh_thu": "Doanh thu",
+                "San_luong": "Sản lượng",
+                "Khoi_luong": "Khối lượng"
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
 
-    # R5 – Tập trung cuối tháng & đột biến KL (10 điểm)
-    dt_cuoi=BAN[BAN["Cuoi"]]["Thành tiền bán"].sum(); tl_cuoi=(dt_cuoi/tDT_*100) if tDT_ else 0
-    r5a=min(6,tl_cuoi/8)
-    # KL đột biến
-    mkl=dm["KL"].mean(); skl=dm["KL"].std() or 1
-    n_db=len(dm[dm["KL"].sub(mkl).div(skl).abs()>1.5])
-    r5b=min(4,n_db*2)
-    r5=r5a+r5b
-    lv5="h" if r5>=7 else "m" if r5>=3 else "l"
-    detail_r5=(f"DT tập trung cuối tháng (ngày 28–31): <b>{tl_cuoi:.1f}%</b> ({f(dt_cuoi)} VNĐ)<br>"
-               f"Số tháng KL đột biến (>1.5σ): <b>{n_db} tháng</b><br>"
-               f"<b>→ Nguyên nhân:</b> Đẩy doanh số hoàn thành chỉ tiêu cuối kỳ, "
-               f"ghi nhận doanh thu trước khi kết sổ, hoặc dự án nhận hàng theo đợt cuối tháng. "
-               f"KL đột biến thường gắn với đơn hàng dự án lớn thi công tập trung.")
-    RISKS.append(("📅 Tập trung cuối tháng & KL đột biến",10,round(r5,1),lv5,detail_r5,None))
+    st.markdown(
+        '<div class="section-title">MỘT XE - NHIỀU NPP - NHIỀU NGÀY</div>',
+        unsafe_allow_html=True
+    )
 
-    # R6 – Biến động biên LN theo tháng (5 điểm)
-    mb2=dlnm["Bien"].mean(); sb2=dlnm["Bien"].std() or 1
-    n_a=len(dlnm[(dlnm["Bien"]-mb2).div(sb2)<-1.2])
-    r6=min(5,n_a*2)
-    lv6="h" if r6>=4 else "m" if r6>=2 else "l"
-    detail_r6=(f"Số tháng Biên LN thấp bất thường (Z<-1.2σ): <b>{n_a} tháng</b><br>"
-               f"<b>→ Nguyên nhân:</b> Chính sách chiết khấu theo mùa/quý, "
-               f"cạnh tranh giá gay gắt từ đối thủ trong kỳ đó, "
-               f"hoặc mix sản phẩm dịch chuyển sang SP biên thấp (ống lớn HDPE).")
-    RISKS.append(("📉 Biến động Biên LN bất thường",5,round(r6,1),lv6,detail_r6,None))
+    if VEHICLE_PERIOD.empty:
 
-    # ── TỔNG ĐIỂM (thang 100)
-    total_w=sum(r[1] for r in RISKS)   # = 100
-    total_s=sum(r[2] for r in RISKS)
-    score=round(total_s/total_w*100) if total_w else 0
-    nh=sum(1 for r in RISKS if r[3]=="h")
-    nm_=sum(1 for r in RISKS if r[3]=="m")
-    nl=sum(1 for r in RISKS if r[3]=="l")
-    rc="#f87171" if score>=60 else "#fbbf24" if score>=30 else "#34d399"
-    rl="RỦI RO CAO" if score>=60 else "RỦI RO TRUNG BÌNH" if score>=30 else "RỦI RO THẤP"
+        st.success(
+            "Chưa phát hiện xe dùng chung bởi nhiều NPP trong kỳ."
+        )
 
-    # ── Layout: Gauge bên trái, bars bên phải
-    st.markdown("---")
-    cg,cb=st.columns([1,2.2])
+    else:
 
-    with cg:
-        # Gauge dạng Indicator
-        fg=go.Figure(go.Indicator(
-            mode="gauge+number",value=score,
-            number={"font":{"size":54,"color":rc,"family":"JetBrains Mono"}},
-            gauge={"axis":{"range":[0,100],"tickfont":{"size":10,"color":FC},"tickcolor":FC},
-                   "bar":{"color":rc,"thickness":0.7},
-                   "bgcolor":"#0b1829","borderwidth":0,
-                   "steps":[{"range":[0,30],"color":"#081a0f"},
-                             {"range":[30,60],"color":"#271a08"},
-                             {"range":[60,100],"color":"#2a0e0e"}],
-                   "threshold":{"line":{"color":"#fff","width":2},"thickness":0.85,"value":score}}))
-        fg.update_layout(paper_bgcolor="#0b1829",plot_bgcolor="#0b1829",
-                          font_color=FC,height=240,
-                          margin=dict(l=16,r=16,t=16,b=16),
-                          annotations=[dict(text=rl,x=0.5,y=-0.12,showarrow=False,
-                                             font=dict(size=12,color=rc,family="Be Vietnam Pro",weight=700),
-                                             xanchor="center")])
-        st.markdown('<div class="gbox">', unsafe_allow_html=True)
-        st.plotly_chart(fg,use_container_width=True)
-        st.markdown(f'<div class="gsub">Điểm: {score}/100 &nbsp;·&nbsp; '
-                    f'🔴 {nh} &nbsp;🟡 {nm_} &nbsp;🟢 {nl}</div></div>',
-                    unsafe_allow_html=True)
+        st.warning(
+            f"Phát hiện {len(VEHICLE_PERIOD):,} xe liên quan từ 2 NPP trở lên."
+        )
 
-    with cb:
-        # Risk bars
-        for rname,rw,rs,rlv,_,_ in RISKS:
-            pct=(rs/rw*100) if rw else 0
-            bc="#f87171" if rlv=="h" else "#fbbf24" if rlv=="m" else "#34d399"
-            badge=f'<span class="badge-{rlv}" style="background:{bc};color:{"#fff" if rlv!="m" else "#1a1a00"};'
-            badge+=f'font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;">'
-            badge+=f'{"CAO" if rlv=="h" else "TB" if rlv=="m" else "OK"}</span>'
-            st.markdown(f"""<div class="rb">
-                <div class="rb-row">
-                    <span class="rb-n">{rname}</span>
-                    <span style="display:flex;align-items:center;gap:6px;">
-                        {badge}
-                        <span class="rb-s" style="color:{bc}">{rs:.1f}<span style="font-size:10px;color:{FC}">/{rw}</span></span>
-                    </span>
-                </div>
-                <div class="rb-bg"><div class="rb-f" style="width:{pct:.0f}%;background:{bc};"></div></div>
-            </div>""", unsafe_allow_html=True)
+        st.dataframe(
+            VEHICLE_PERIOD.rename(columns={
+                "Bien_so": "Biển số",
+                "So_NPP": "Số NPP",
+                "Danh_sach_NPP": "Danh sách NPP",
+                "So_ngay_hoat_dong": "Số ngày hoạt động",
+                "So_dia_diem": "Số địa điểm",
+                "So_kho": "Số kho",
+                "So_giao_dich": "Số giao dịch",
+                "Doanh_thu": "Doanh thu",
+                "San_luong": "Sản lượng",
+                "Khoi_luong": "Khối lượng"
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
 
-    # ── Chi tiết từng rủi ro
-    st.markdown("---")
-    sh("🔍 Phân tích chi tiết – Nguyên nhân & Bằng chứng")
+    st.markdown(
+        '<div class="section-title">HƯỚNG KIỂM TRA</div>',
+        unsafe_allow_html=True
+    )
 
-    for rname,rw,rs,rlv,detail,ddet in RISKS:
-        ico="🔴" if rlv=="h" else "🟡" if rlv=="m" else "🟢"
-        cls="ah" if rlv=="h" else "am" if rlv=="m" else "al"
-        al(cls,f"{ico} <b>{rname}</b> &nbsp;·&nbsp; Điểm: <b>{rs:.1f}/{rw}</b><br>{detail}")
-        if ddet is not None and not ddet.empty and rlv in ["h","m"]:
-            with st.expander(f"📋 Xem {min(len(ddet),40)} bằng chứng – {rname}"):
-                ds=ddet.head(40).copy()
-                # Format số
-                for c in ["Thành tiền bán","Lợi nhuận","GB/kg","GV/kg","Margin/kg",
-                           "GB/cái","TB thị trường","Giảm%"]:
-                    if c in ds.columns:
-                        ds[c]=pd.to_numeric(ds[c],errors="coerce").apply(
-                            lambda v: f"{v:,.0f}" if pd.notna(v) else "")
-                st.dataframe(ds,use_container_width=True,hide_index=True)
+    st.write("""
+    - Xác minh chủ phương tiện và người điều khiển.
+    - Đối chiếu phiếu xuất kho và thời điểm lấy hàng của từng NPP.
+    - Kiểm tra các địa điểm lấy hàng của cùng biển số.
+    - Xác minh việc dùng chung xe có hợp đồng hoặc thỏa thuận hay không.
+    - Kiểm tra quan hệ giữa các NPP cùng sử dụng xe.
+    - Đối chiếu tính hợp lý về thời gian và địa lý nếu có dữ liệu giờ lấy hàng.
+    """)
 
-    # ── Công nợ placeholder
-    st.markdown("---")
-    sh("🏦 Công nợ (chưa cập nhật)")
-    al("ai","📋 <b>Module Công nợ chưa có dữ liệu.</b> Cần bổ sung file:<br>"
-           "&nbsp;&nbsp;• <b>AR Aging Report</b>: ngày tồn đọng, quá hạn từng dự án/KH<br>"
-           "&nbsp;&nbsp;• <b>Lịch sử thanh toán</b>: thói quen NET 30/60/90 ngày<br>"
-           "&nbsp;&nbsp;• <b>Hạn mức tín dụng</b>: so sánh dư nợ vs hạn mức phê duyệt<br>"
-           "<b>Nhận xét từ dữ liệu hiện có:</b> Đơn hàng PKD dự án thường thanh toán theo tiến độ công trình "
-           "(30–90 ngày sau nghiệm thu), đơn có PO/hợp đồng lớn rủi ro tập trung công nợ cao.")
+
+# ============================================================
+# TAB 5 - DOANH THU VÀ MẶT HÀNG
+# ============================================================
+
+with T5:
+
+    st.markdown(
+        '<div class="section-title">DOANH THU VÀ SẢN LƯỢNG THEO THÁNG</div>',
+        unsafe_allow_html=True
+    )
+
+    MONTHLY = (
+        DF.groupby("_month")
+        .agg(
+            Doanh_thu=("_revenue", "sum"),
+            San_luong=("_quantity", "sum"),
+            Khoi_luong=("_weight", "sum"),
+            So_NPP=("_customer_key", "nunique")
+        )
+        .reset_index()
+        .sort_values("_month")
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        fig = px.bar(
+            MONTHLY,
+            x="_month",
+            y="Doanh_thu",
+            title="Doanh thu theo tháng"
+        )
+
+        fig.update_layout(
+            paper_bgcolor="#07111e",
+            plot_bgcolor="#07111e",
+            font_color="#c5d7eb"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+
+        fig = px.line(
+            MONTHLY,
+            x="_month",
+            y="San_luong",
+            markers=True,
+            title="Sản lượng theo tháng"
+        )
+
+        fig.update_layout(
+            paper_bgcolor="#07111e",
+            plot_bgcolor="#07111e",
+            font_color="#c5d7eb"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("### Bảng mặt hàng")
+
+    if PRODUCT_SUMMARY.empty:
+
+        st.info("Chưa chọn cột tên hàng hoặc mã hàng.")
+
+    else:
+
+        st.dataframe(
+            PRODUCT_SUMMARY,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    st.markdown("### Tháng có sản lượng đột biến")
+
+    if SPIKE_TABLE.empty:
+
+        st.success(
+            "Chưa phát hiện tháng có sản lượng gấp từ 3 lần trung vị "
+            "của các tháng trước theo điều kiện kiểm tra."
+        )
+
+    else:
+
+        st.warning(
+            f"Có {len(SPIKE_TABLE):,} trường hợp sản lượng cần xem xét."
+        )
+
+        st.dataframe(
+            SPIKE_TABLE,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.write("""
+        Hướng kiểm tra: đối chiếu đơn đặt hàng, sản lượng giao nhận,
+        tồn kho NPP, khả năng tiêu thụ và các chương trình bán hàng
+        trong kỳ. Đột biến sản lượng không đồng nghĩa với việc ghi nhận
+        giao dịch bất thường.
+        """)
+
+
+# ============================================================
+# TAB 6 - BẢNG ĐIỂM RỦI RO
+# ============================================================
+
+with T6:
+
+    st.markdown(
+        '<div class="section-title">ĐÁNH GIÁ RỦI RO TỪNG NHÀ PHÂN PHỐI</div>',
+        unsafe_allow_html=True
+    )
+
+    st.caption(
+        "Điểm tối đa 100. Mô hình dùng để sàng lọc và xếp thứ tự ưu tiên kiểm tra."
+    )
+
+    SCORE_TABLE = CUSTOMER_SUMMARY[[
+        "NPP",
+        "Diem_kho",
+        "Diem_dia_diem",
+        "Diem_xe_cung_ngay",
+        "Diem_xe_trong_ky",
+        "Diem_tan_suat",
+        "Diem_nhieu_kho",
+        "Diem_dot_bien_san_luong",
+        "Diem_chung_tu_trung",
+        "Diem_thieu_dia_diem",
+        "Tong_diem",
+        "Muc_do",
+        "Nhan_dinh",
+        "Giai_phap"
+    ]].copy()
+
+    SCORE_TABLE = SCORE_TABLE.rename(columns={
+        "Diem_kho": "Kho /25",
+        "Diem_dia_diem": "Địa điểm /20",
+        "Diem_xe_cung_ngay": "Xe cùng ngày /20",
+        "Diem_xe_trong_ky": "Xe trong kỳ /15",
+        "Diem_tan_suat": "Tần suất /5",
+        "Diem_nhieu_kho": "Nhiều kho /5",
+        "Diem_dot_bien_san_luong": "Sản lượng /5",
+        "Diem_chung_tu_trung": "Trùng dữ liệu /3",
+        "Diem_thieu_dia_diem": "Thiếu địa điểm /2",
+        "Tong_diem": "Tổng điểm",
+        "Muc_do": "Mức độ",
+        "Nhan_dinh": "Nhận định",
+        "Giai_phap": "Giải pháp"
+    })
+
+    st.dataframe(
+        SCORE_TABLE,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.markdown("### Phân tích chi tiết một NPP")
+
+    selected_customer = st.selectbox(
+        "Chọn NPP",
+        CUSTOMER_SUMMARY["NPP"].dropna().unique().tolist()
+    )
+
+    detail = CUSTOMER_SUMMARY[
+        CUSTOMER_SUMMARY["NPP"] == selected_customer
+    ].iloc[0]
+
+    score = int(detail["Tong_diem"])
+    level = detail["Muc_do"]
+
+    st.metric(
+        "Điểm rủi ro",
+        f"{score}/100",
+        delta=level
+    )
+
+    st.markdown(
+        f'<div class="{risk_class_css(level)}">'
+        f'<b>NHẬN ĐỊNH:</b> {detail["Nhan_dinh"]}<br><br>'
+        f'<b>GIẢI PHÁP:</b> {detail["Giai_phap"]}'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+    score_detail = pd.DataFrame({
+        "Nhóm rủi ro": [
+            "Kho ngoài danh sách",
+            "NPP trùng địa điểm",
+            "Xe nhiều NPP cùng ngày",
+            "Xe nhiều NPP trong kỳ",
+            "Tần suất lấy hàng",
+            "NPP nhiều kho cùng ngày",
+            "Sản lượng đột biến",
+            "Dòng giao dịch trùng",
+            "Thiếu địa điểm"
+        ],
+        "Điểm": [
+            detail["Diem_kho"],
+            detail["Diem_dia_diem"],
+            detail["Diem_xe_cung_ngay"],
+            detail["Diem_xe_trong_ky"],
+            detail["Diem_tan_suat"],
+            detail["Diem_nhieu_kho"],
+            detail["Diem_dot_bien_san_luong"],
+            detail["Diem_chung_tu_trung"],
+            detail["Diem_thieu_dia_diem"]
+        ]
+    })
+
+    fig = px.bar(
+        score_detail,
+        x="Điểm",
+        y="Nhóm rủi ro",
+        orientation="h",
+        text="Điểm",
+        title=f"Cơ cấu điểm rủi ro - {selected_customer}"
+    )
+
+    fig.update_layout(
+        paper_bgcolor="#07111e",
+        plot_bgcolor="#07111e",
+        font_color="#c5d7eb",
+        height=390
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+# ============================================================
+# TAB 7 - XUẤT BẰNG CHỨNG
+# ============================================================
+
+with T7:
+
+    st.markdown(
+        '<div class="section-title">XUẤT BÁO CÁO VÀ BẰNG CHỨNG</div>',
+        unsafe_allow_html=True
+    )
+
+    st.write("""
+    File Excel xuất ra gồm các sheet:
+    - Tổng hợp rủi ro NPP.
+    - Giao dịch xe khách hàng.
+    - Giao dịch lấy hàng ngoài danh sách kho.
+    - NPP trùng địa điểm.
+    - Một xe nhiều NPP cùng ngày.
+    - Một xe nhiều NPP trong kỳ.
+    - Dòng dữ liệu nghi trùng.
+    - Sản lượng đột biến.
+    - Tổng hợp mặt hàng.
+    - Dữ liệu sau lọc.
+    """)
+
+    export_data = io.BytesIO()
+
+    with pd.ExcelWriter(
+        export_data,
+        engine="openpyxl"
+    ) as writer:
+
+        CUSTOMER_SUMMARY.to_excel(
+            writer,
+            sheet_name="Tong_hop_rui_ro_NPP",
+            index=False
+        )
+
+        CUSTOMER_CAR.to_excel(
+            writer,
+            sheet_name="Xe_khach_hang",
+            index=False
+        )
+
+        WAREHOUSE_EVIDENCE[
+            WAREHOUSE_EVIDENCE["_warehouse_status"] == "Ngoài danh sách"
+        ].to_excel(
+            writer,
+            sheet_name="Kho_ngoai_danh_sach",
+            index=False
+        )
+
+        ADDRESS_GROUP.to_excel(
+            writer,
+            sheet_name="NPP_trung_dia_diem",
+            index=False
+        )
+
+        VEHICLE_DAY.to_excel(
+            writer,
+            sheet_name="Xe_nhieu_NPP_cung_ngay",
+            index=False
+        )
+
+        VEHICLE_PERIOD.to_excel(
+            writer,
+            sheet_name="Xe_nhieu_NPP_trong_ky",
+            index=False
+        )
+
+        DUPLICATE_ROWS.to_excel(
+            writer,
+            sheet_name="Dong_du_lieu_trung",
+            index=False
+        )
+
+        SPIKE_TABLE.to_excel(
+            writer,
+            sheet_name="San_luong_dot_bien",
+            index=False
+        )
+
+        PRODUCT_SUMMARY.to_excel(
+            writer,
+            sheet_name="Tong_hop_mat_hang",
+            index=False
+        )
+
+        DF.to_excel(
+            writer,
+            sheet_name="Du_lieu_sau_loc",
+            index=False
+        )
+
+    export_data.seek(0)
+
+    st.download_button(
+        label="⬇️ TẢI BÁO CÁO RỦI RO NPP (EXCEL)",
+        data=export_data,
+        file_name="Bao_cao_phan_tich_rui_ro_NPP.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
+# ============================================================
+# 36. THANG MÀU ĐÁNH GIÁ
+# ============================================================
+
+st.markdown("---")
+
+st.markdown(
+    '<div class="section-title">THANG MÀU ĐÁNH GIÁ RỦI RO</div>',
+    unsafe_allow_html=True
+)
+
+c1, c2, c3, c4 = st.columns(4)
+
+with c1:
+    st.markdown(
+        '<div class="risk-green"><b>XANH - THẤP</b><br>0–24 điểm</div>',
+        unsafe_allow_html=True
+    )
+
+with c2:
+    st.markdown(
+        '<div class="risk-yellow"><b>VÀNG - THEO DÕI</b><br>25–44 điểm</div>',
+        unsafe_allow_html=True
+    )
+
+with c3:
+    st.markdown(
+        '<div class="risk-orange"><b>CAM - CAO</b><br>45–64 điểm</div>',
+        unsafe_allow_html=True
+    )
+
+with c4:
+    st.markdown(
+        '<div class="risk-red"><b>ĐỎ - RẤT CAO</b><br>65–100 điểm</div>',
+        unsafe_allow_html=True
+    )
+
+
+st.caption(
+    "Lưu ý: Điểm số là mô hình sàng lọc rủi ro. "
+    "Dấu hiệu trùng địa điểm, dùng chung xe hoặc lấy hàng ngoài danh sách "
+    "cần được xác minh bằng chứng từ và giải trình trước khi kết luận."
+)
+
+st.markdown(
+    """
+    <div style='text-align:center;color:#526982;font-size:10px;margin-top:25px;'>
+    HOA SEN GROUP | INTERNAL CONTROL & BUSINESS RISK ANALYTICS
+    </div>
+    """,
+    unsafe_allow_html=True
+)
