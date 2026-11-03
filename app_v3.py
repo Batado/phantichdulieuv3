@@ -521,9 +521,10 @@ def build_vehicle_tables(car):
     )
     customer_day_max = day_customer.groupby("_customer_key")["So_NPP"].max()
 
-    repeated_shared_vehicles = period[
-        period["So_ngay_dung_chung"].fillna(0) >= 2
-    ].copy()
+    # period already contains plates used by >=2 NPP across >=2 activity days.
+    # Do not require the NPPs to share the plate on the same calendar day:
+    # NPP A may use it on day 1 and NPP B on day 2.
+    repeated_shared_vehicles = period.copy()
     period_customer = valid.merge(
         repeated_shared_vehicles[["_plate", "So_NPP", "So_ngay_dung_chung"]],
         on="_plate",
