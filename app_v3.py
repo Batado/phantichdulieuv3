@@ -911,12 +911,18 @@ allowed_warehouses = {
 }
 
 DF["_region"] = (
-    DF[region_col].apply(lambda x: canonical_region(x, "", region_aliases))
+    DF.apply(
+        lambda row: canonical_region(row[region_col], row["_address"], region_aliases),
+        axis=1
+    )
     if region_col else
     DF["_address"].apply(lambda x: detect_region(x, region_aliases))
 )
 CUSTOMER_CAR_ALL["_region"] = (
-    CUSTOMER_CAR_ALL[region_col].apply(lambda x: canonical_region(x, "", region_aliases))
+    CUSTOMER_CAR_ALL.apply(
+        lambda row: canonical_region(row[region_col], row["_address"], region_aliases),
+        axis=1
+    )
     if region_col else
     CUSTOMER_CAR_ALL["_address"].apply(lambda x: detect_region(x, region_aliases))
 )
