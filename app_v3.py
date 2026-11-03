@@ -61,30 +61,30 @@ ADDRESS_WAREHOUSE_RULES = {
             "thanh hoa", "nghe an", "ha tinh", "tuyen quang", "phu tho", "thai nguyen",
             "lao cai", "lai chau", "son la", "dien bien", "xa nghia dan", "xa kim anh",
             "phuong tam thanh", "phuong quyet thang", "phuong minh xuan"],
-        "warehouses": {"261", "291"},
+        "warehouses": {"261", "262", "291"},
     },
     "Huế và Quảng Trị": {
         "keywords": ["hue", "thua thien hue", "quang tri"],
-        "warehouses": {"251", "261", "263"},
+        "warehouses": {"251", "253", "254", "261", "262", "263", "264"},
     },
     "Đà Nẵng": {
         "keywords": ["da nang"],
-        "warehouses": {"251", "263"},
+        "warehouses": {"251", "253", "254", "263", "264"},
     },
     "Khánh Hòa và Quảng Ngãi": {
         "keywords": ["khanh hoa", "quang ngai"],
-        "warehouses": {"251", "263", "053", "284"},
+        "warehouses": {"251", "253", "254", "263", "264", "053", "054", "055", "284", "285"},
     },
     "Tây Nguyên và địa bàn liên quan": {
         "keywords": ["dak lak", "daklak", "gia lai", "lam dong", "xa duc lap",
             "xa cat tien 2", "xa cat tien", "xa nam ban lam ha", "xa quang lap",
             "xa duc trong", "phuong lam vien da lat"],
-        "warehouses": {"251", "252", "263", "053", "054", "284"},
+        "warehouses": {"251", "253", "254", "252", "263", "264", "053", "054", "055", "284", "285"},
     },
     "Đông Nam Bộ": {
         "keywords": ["dong nai", "ho chi minh", "tay ninh", "binh duong",
             "ba ria vung tau", "ba ria- vung tau", "quan thu duc", "phuong thong nhat"],
-        "warehouses": {"053", "054", "281", "284"},
+        "warehouses": {"053", "054", "055", "281", "283", "284", "285"},
     },
     "Tây Nam Bộ": {
         "keywords": ["an giang", "dong thap", "vinh long", "can tho", "ca mau"],
@@ -92,11 +92,11 @@ ADDRESS_WAREHOUSE_RULES = {
     },
 }
 BROAD_REGION_RULES = {
-    "Miền Bắc": {"261", "291"},
-    "Miền Trung": {"251", "261", "263", "053", "054", "284"},
-    "Tây Nguyên": {"251", "252", "263", "053", "054", "284"},
-    "Miền Nam": {"053", "054", "281", "284"},
-    "Miền Tây": {"053", "054", "281", "284"},
+    "Miền Bắc": {"261", "262", "291"},
+    "Miền Trung": {"251", "253", "254", "261", "262", "263", "264", "053", "054", "055", "284", "285"},
+    "Tây Nguyên": {"251", "253", "254", "252", "263", "264", "053", "054", "055", "284", "285"},
+    "Miền Nam": {"053", "054", "055", "281", "283", "284", "285"},
+    "Miền Tây": {"053", "054", "055", "281", "283", "284", "285"},
 }
 SPECIAL_WAREHOUSES = {"282", "292"}
 WAREHOUSE_STATUS_OUTSIDE = "Ngoài danh sách kho hợp lý - cần xác minh"
