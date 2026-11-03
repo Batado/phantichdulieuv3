@@ -311,7 +311,7 @@ def identify_region(region_value, address):
 def extract_warehouse_code(document_number):
     """Lấy 3 chữ số đầu của Số chứng từ: 263.18067094 -> 263."""
     text = clean(document_number).strip()
-    match = re.match(r"^(\d{3})(?:[.\\-/]|\\s|$)", text)
+    match = re.match(r"^(\d{3})(?:[./-]|\s|$)", text)
     return match.group(1) if match else ""
 
 
@@ -896,8 +896,8 @@ with tab_warehouse:
     st.caption("Chỉ xét các dòng có hình thức vận chuyển là Xe khách hàng. Xe nhà máy và xe nhà máy thuê ngoài được loại khỏi phần này.")
     a, b, c = st.columns(3)
     a.metric("Dòng xe khách hàng", f"{len(customer_vehicle):,}")
-    b.metric("Ngoài danh sách kho", f"{len(warehouse_evidence):,}")
-    c.metric("Chưa đủ dữ liệu", f"{len(warehouse_unknown):,}")
+    b.metric("Ngoài vùng ưu tiên", f"{len(warehouse_evidence):,}")
+    c.metric("Kho HS Home / thiếu dữ liệu", f"{len(warehouse_special) + len(warehouse_unknown):,}")
     if not warehouse_counts.empty:
         st.dataframe(warehouse_counts, use_container_width=True, hide_index=True)
     st.markdown("### Giao dịch kho ngoài vùng ưu tiên")
@@ -940,10 +940,10 @@ with tab_warehouse:
     st.markdown("### Cách xử lý đề xuất")
     st.write(
         "1. Xác minh địa chỉ NPP và vùng địa lý thực tế. "
-        "2. Đối chiếu mã kho xuất với danh sách kho được phép theo vùng. "
-        "3. Kiểm tra phiếu xuất kho, chứng từ điều chuyển và phê duyệt ngoại lệ. "
-        "4. Nếu kho ngoài danh sách nhưng có lý do điều phối hợp lệ, lưu bằng chứng và phê duyệt. "
-        "5. Chỉ kết luận sai lệch sau khi đối chiếu hồ sơ và giải trình."
+        "2. Đối chiếu mã kho trích từ 3 số đầu chứng từ với tên kho trong danh mục và vùng địa chỉ NPP. "
+        "3. Với mã kho ngoài vùng ưu tiên, kiểm tra khoảng cách thực tế, tuyến đường, năng lực kho, tồn kho và lý do điều phối. "
+        "4. Với mã 282/292 (hàng gửi HS Home), kiểm tra riêng địa điểm lưu hàng, phiếu nhập/xuất và đơn vị quản lý. "
+        "5. Chỉ kết luận bất thường sau khi đối chiếu hồ sơ, giải trình và phê duyệt ngoại lệ."
     )
 
 with tab_vehicle:
