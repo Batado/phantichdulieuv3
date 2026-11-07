@@ -1103,6 +1103,50 @@ if not monthly_panel.empty and prior_months and later_months and not sales.empty
 
 product_shift_review = pd.DataFrame(product_shift_rows)
 
+# Month-level abrupt changes against the median of up to 3 preceding months.
+# Requiring prior activity avoids treating a new NPP as a sudden spike.
+monthly_anomaly_rows = []
+if not monthly_panel.empty and len(month_list) >= 4:
+    for (customer_key, customer_name), group in monthly_panel.groupby(
+        ["_customer_key", "_ten_kh"], sort=False
+    ):
+        group = group.sort_values("_thang").reset_index(drop=True)
+        for i in range(3, len(group)):
+            history = group.iloc[max(0, i - 3):i]
+            current = group.iloc[i]
+            q_base = float(history["San_luong"].median())
+            r_base = float(history["Doanh_thu"].median())
+            q_now = float(current["San_luong"])
+            r_now = float(current["Doanh_thu"])
+            q_change = ((q_now / q_base) - 1) * 100 if q_base > 0 else np.nan
+            r_change = ((r_now / r_base) - 1) * 100 if r_base > 0 else np.nan
+
+            anomaly = ""
+            if q_base > 0 and q_now <= q_base * 0.20:
+                anomaly = "Sản lượng giảm đột ngột so với 3 tháng trước"
+            elif r_base > 0 and r_now <= r_base * 0.20:
+                anomaly = "Doanh thu giảm đột ngột so với 3 tháng trước"
+            elif q_base > 0 and q_now >= q_base * 3:
+                anomaly = "Sản lượng tăng đột biến so với 3 tháng trước"
+            elif r_base > 0 and r_now >= r_base * 3:
+                anomaly = "Doanh thu tăng đột biến so với 3 tháng trước"
+
+            if anomaly:
+                monthly_anomaly_rows.append({
+                    "_customer_key": customer_key,
+                    "NPP": customer_name,
+                    "Tháng bất thường": current["_thang"],
+                    "Loại bất thường": anomaly,
+                    "Sản lượng tháng": q_now,
+                    "Trung vị sản lượng 3 tháng trước": q_base,
+                    "Biến động sản lượng %": q_change,
+                    "Doanh thu tháng": r_now,
+                    "Trung vị doanh thu 3 tháng trước": r_base,
+                    "Biến động doanh thu %": r_change,
+                })
+
+monthly_anomalies = pd.DataFrame(monthly_anomaly_rows)
+
 # Summarize monthly risk signals by distributor.
 if not customer_monthly_review.empty:
     customer_monthly_review["Co_giam_manh"] = customer_monthly_review["Mẫu hình"].isin([
@@ -1126,6 +1170,11 @@ if not product_shift_review.empty:
 else:
     shift_name_set = set()
 
+monthly_anomaly_count = (
+    monthly_anomalies.groupby("_customer_key").size()
+    if not monthly_anomalies.empty else pd.Series(dtype=float)
+)
+
 # Unrecognized data are isolated and not treated as confirmed risk.
 unknown_parts = []
 for label, mask, reason in [
@@ -1147,22 +1196,37 @@ for label, mask, reason in [
 unrecognized = pd.concat(unknown_parts, ignore_index=True).drop_duplicates("_dong_nguon") if unknown_parts else pd.DataFrame()
 
 # Risk points are transparent screening weights, not legal conclusions.
-warehouse_by_customer = warehouse_evidence.groupby("_customer_key").size() if not warehouse_evidence.empty else pd.Series(dtype=float)
-vehicle_day_by_customer = (
+# Count distinct business events, not item rows, to avoid inflating risk
+# when one invoice contains several product lines.
+warehouse_by_customer = (
+    warehouse_evidence.groupby("_customer_key")["_chung_tu"].nunique()
+    if not warehouse_evidence.empty else pd.Series(dtype=float)
+)
+vehicle_day_events = (
     vehicle_valid.merge(
         vehicle_day_shared[["_bien_so", "_ngay_only"]],
         on=["_bien_so", "_ngay_only"], how="inner"
-    ).groupby("_customer_key").size()
-    if not vehicle_day_shared.empty else pd.Series(dtype=float)
+    )[["_customer_key", "_bien_so", "_ngay_only"]].drop_duplicates()
+    if not vehicle_day_shared.empty else pd.DataFrame()
+)
+vehicle_day_by_customer = (
+    vehicle_day_events.groupby("_customer_key").size()
+    if not vehicle_day_events.empty else pd.Series(dtype=float)
+)
+vehicle_period_events = (
+    vehicle_valid.merge(
+        vehicle_period_shared[["_bien_so"]],
+        on="_bien_so", how="inner"
+    )[["_customer_key", "_bien_so"]].drop_duplicates()
+    if not vehicle_period_shared.empty else pd.DataFrame()
 )
 vehicle_period_by_customer = (
-    vehicle_valid.merge(vehicle_period_shared[["_bien_so"]], on="_bien_so", how="inner")
-    .groupby("_customer_key").size()
-    if not vehicle_period_shared.empty else pd.Series(dtype=float)
+    vehicle_period_events.groupby("_customer_key").size()
+    if not vehicle_period_events.empty else pd.Series(dtype=float)
 )
 address_by_customer = (
     address_pairs.merge(address_shared[["_dia_chi_norm"]], on="_dia_chi_norm", how="inner")
-    .groupby("_customer_key").size()
+    .groupby("_customer_key")["_dia_chi_norm"].nunique()
     if not address_shared.empty else pd.Series(dtype=float)
 )
 
@@ -1183,12 +1247,13 @@ for _, row in customer_summary.iterrows():
     monthly_decline = bool(monthly_row["Co_giam_manh"]) if monthly_row is not None and "Co_giam_manh" in monthly_row.index else False
     monthly_growth = bool(monthly_row["Co_tang_manh_hoac_quay_lai"]) if monthly_row is not None and "Co_tang_manh_hoac_quay_lai" in monthly_row.index else False
     product_shift = row["_ten_kh"] in shift_name_set
-    # Transparent 100-point screening model. A single business trend alone
-    # cannot make an NPP critical; combined independent signals increase priority.
+    month_anomaly_n = int(monthly_anomaly_count.get(key, 0))
+    # Transparent screening score. A single sales trend alone is not fraud evidence.
     score = min(25, wh_n * 5) + min(15, day_n * 5) + min(15, period_n * 3) + min(10, addr_n * 5)
     score += 10 if monthly_decline else 0
     score += 5 if monthly_growth else 0
     score += 15 if product_shift else 0
+    score += min(5, month_anomaly_n * 2)
     score = min(100, score)
     has_critical_fields = (
         mapped["customer_type"] is not None
@@ -1242,6 +1307,9 @@ for _, row in customer_summary.iterrows():
     if product_shift:
         reasons.append("Có mặt trong nhóm cặp NPP cùng vùng/cùng mặt hàng nhưng biến động sản lượng trái chiều.")
         actions.append("Đối chiếu khu vực phụ trách, khách hàng cuối, chính sách bán hàng và khả năng chuyển dịch đơn hàng giữa các NPP.")
+    if month_anomaly_n:
+        reasons.append(f"Có {month_anomaly_n} tháng phát sinh biến động đột ngột về doanh thu hoặc sản lượng so với 3 tháng liền trước.")
+        actions.append("Kiểm tra đơn hàng, chứng từ, tồn kho, tiến độ giao hàng, công nợ và nguyên nhân biến động theo từng tháng.")
     if not reasons:
         reasons.append("Chưa ghi nhận tín hiệu thuộc các quy tắc sàng lọc hiện tại.")
     if not actions:
@@ -1259,6 +1327,7 @@ for _, row in customer_summary.iterrows():
         "Mẫu hình doanh thu/sản lượng": monthly_pattern,
         "Biến động kinh doanh cần kiểm tra": monthly_decline or monthly_growth,
         "Liên quan dịch chuyển mặt hàng": product_shift,
+        "Số tháng biến động đột ngột": month_anomaly_n,
         "Nhận định": " ".join(reasons),
         "Hướng xử lý": " ".join(actions),
     })
@@ -1702,6 +1771,7 @@ export_sheets = {
     "Theo_thang": monthly_sales,
     "Bien_dong_NPP_theo_thang": customer_monthly_review,
     "Cap_NPP_dich_chuyen_mat_hang": product_shift_review,
+    "Thang_bien_dong_dot_ngot": monthly_anomalies,
     "Bang_panel_NPP_thang": monthly_panel,
     "Kho_can_xac_minh": warehouse_evidence,
     "Kho_HS_Home_can_xac_minh": warehouse_special,
