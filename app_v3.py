@@ -1319,16 +1319,49 @@ for _, row in customer_summary.iterrows():
         bool(row["So_kho"]),
         bool((customer_vehicle["_customer_key"] == key).any()) if not customer_vehicle.empty else False,
     ]) / 4
-    has_customer_vehicle_data = (
-        bool((customer_vehicle["_customer_key"] == key).any())
-        if not customer_vehicle.empty else False
+    npp_vehicle_rows = (
+        customer_vehicle[customer_vehicle["_customer_key"] == key]
+        if not customer_vehicle.empty else pd.DataFrame()
     )
-    # Do not assign a green/low result when the NPP has no evidence
-    # for the currently enabled customer-vehicle control.
-    enough = has_critical_fields and coverage >= 0.75 and has_customer_vehicle_data
+    has_customer_vehicle_data = not npp_vehicle_rows.empty
+    has_valid_vehicle_data = (
+        bool(npp_vehicle_rows["_bien_so_hop_le"].any())
+        if has_customer_vehicle_data else False
+    )
+    comparable_warehouse_statuses = {
+        "Phù hợp địa chỉ/khu vực",
+        WAREHOUSE_STATUS_FALLBACK,
+        WAREHOUSE_STATUS_OUTSIDE,
+        "Không khớp danh sách kho vùng miền trong file",
+        "Theo ghi chú file: không hợp lý - cần xác minh",
+        "Mâu thuẫn: thuật toán phù hợp nhưng file ghi không hợp lý",
+        "Mâu thuẫn: file ghi hợp lý nhưng kho ngoài vùng địa chỉ",
+        WAREHOUSE_STATUS_SPECIAL,
+    }
+    has_warehouse_evidence = (
+        bool(npp_vehicle_rows["_doi_chieu_kho_tong_hop"].isin(comparable_warehouse_statuses).any())
+        if has_customer_vehicle_data else False
+    )
+    # A distributor is not rated green simply because its vehicle/warehouse
+    # evidence is missing or its plate cannot be validated.
+    enough = (
+        has_critical_fields
+        and coverage >= 0.75
+        and has_valid_vehicle_data
+        and has_warehouse_evidence
+    )
     level = make_risk_label(score, enough)
     reasons = []
     actions = []
+    if not enough:
+        reasons.append(
+            "Chưa đủ bằng chứng vận hành để kết luận mức rủi ro thấp/cao; "
+            "cần hoàn thiện giao dịch xe khách hàng có biển số hợp lệ và thông tin đối chiếu kho."
+        )
+        actions.append(
+            "Bổ sung biển số, hình thức vận chuyển, địa điểm NPP, số chứng từ và mã kho; "
+            "chỉ đánh giá lại sau khi dữ liệu đủ điều kiện."
+        )
     if wh_n:
         reasons.append(f"{wh_n} dòng xe khách hàng có mã kho không khớp ma trận địa chỉ hoặc có mâu thuẫn với ghi chú/danh sách kho trong file.")
         actions.append("Đối chiếu phiếu xuất kho, địa chỉ NPP, vùng Miền2 và chứng từ điều chuyển/phê duyệt ngoại lệ.")
