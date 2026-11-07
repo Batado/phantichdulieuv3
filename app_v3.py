@@ -1796,6 +1796,12 @@ with tab_vehicle:
 with tab_risk:
     st.markdown('<div class="section-title">BẢNG ĐÁNH GIÁ VÀ NHẬN ĐỊNH RỦI RO NPP</div>', unsafe_allow_html=True)
     st.caption("Điểm là mức ưu tiên sàng lọc theo các tín hiệu quan sát được; không phải kết luận vi phạm. Bảng hiển thị riêng điểm từng nhóm để có thể truy nguyên lý do.")
+    st.info(
+        "Trọng số tối đa: kho không phù hợp 25 điểm; xe nhiều NPP cùng ngày 15; "
+        "xe nhiều NPP trong kỳ 15; địa chỉ trùng 10; giảm/ngừng mua 10; "
+        "tăng/quay lại 5; dịch chuyển cùng mặt hàng và vùng 15; biến động đột ngột từng tháng 5. "
+        "Tổng tối đa 100 điểm. Một dấu hiệu đơn lẻ không đủ để kết luận vi phạm."
+    )
     if risk_summary.empty:
         st.info("Không có dữ liệu để lập bảng đánh giá.")
     else:
