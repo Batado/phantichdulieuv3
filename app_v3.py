@@ -825,21 +825,40 @@ if mapped["item_code"] and sales.empty:
 # PREPARE RISK TABLES
 # ============================================================
 
-customer_summary = (
+current_customer_summary = (
     filtered.groupby(["_customer_key", "_ten_kh"], dropna=False)
     .agg(
         So_dong=("_customer_key", "size"),
         So_chung_tu=("_chung_tu", "nunique"),
         Doanh_thu=("_doanh_thu", "sum"),
         San_luong=("_san_luong", "sum"),
+    )
+    .reset_index()
+)
+
+# Keep NPP with no transactions in the selected period so a stop/drop pattern
+# does not disappear from the control dashboard.
+history_customer_summary = (
+    history_filtered.groupby(["_customer_key", "_ten_kh"], dropna=False)
+    .agg(
         So_dia_chi=("_dia_chi", lambda s: s.replace("", np.nan).nunique()),
         So_kho=("_ma_kho", lambda s: s.replace("", np.nan).nunique()),
     )
     .reset_index()
 )
+customer_summary = history_customer_summary.merge(
+    current_customer_summary,
+    on=["_customer_key", "_ten_kh"],
+    how="left"
+)
+for metric in ["So_dong", "So_chung_tu", "Doanh_thu", "San_luong"]:
+    customer_summary[metric] = customer_summary[metric].fillna(0)
 
 # Warehouse: evaluate customer-owned vehicle transactions only.
 customer_vehicle = filtered[filtered["_loai_xe"] == "Xe khách hàng"].copy()
+history_customer_vehicle = history_filtered[
+    history_filtered["_loai_xe"] == "Xe khách hàng"
+].copy()
 warehouse_evidence_statuses = {
     WAREHOUSE_STATUS_OUTSIDE,
     "Không khớp danh sách kho vùng miền trong file",
@@ -974,7 +993,7 @@ monthly_customer = (
 
 # Monthly panel inserts zero-sales months so inactivity is visible.
 if month_list:
-    customer_index = sales[["_customer_key", "_ten_kh"]].drop_duplicates()
+    customer_index = history_sales[["_customer_key", "_ten_kh"]].drop_duplicates()
     panel_index = customer_index.assign(_join=1).merge(
         pd.DataFrame({"_thang": month_list, "_join": 1}),
         on="_join"
