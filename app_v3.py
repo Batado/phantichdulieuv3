@@ -1790,7 +1790,7 @@ if not monthly_anomalies_period.empty:
     auto_comments.append((
         "warning",
         "Biến động đột ngột theo tháng",
-        f"Trong kỳ báo cáo có {len(monthly_anomalies_period)} tháng phát sinh doanh thu hoặc sản lượng tăng/giảm đột ngột so với 3 tháng liền trước."
+        f"Trong kỳ báo cáo có {len(monthly_anomalies_period)} trường hợp NPP-tháng có doanh thu hoặc sản lượng tăng/giảm đột ngột so với 3 tháng liền trước."
     ))
 
 if unknown_count:
@@ -1856,12 +1856,19 @@ with tab_overview:
     st.markdown("### Đánh giá các trụ cột kiểm soát")
     quality_col, warehouse_col, business_col = st.columns(3)
     with business_col:
-        business_status = "Cần cải thiện" if (
+        if revenue_change is None and quantity_change is None:
+            business_status = "Chưa có kỳ đối chiếu"
+            business_css = "risk-unknown"
+        elif (
             (revenue_change is not None and revenue_change <= -30)
             or (quantity_change is not None and quantity_change <= -30)
             or inactive_npp_count > 0
-        ) else "Ổn định theo chỉ tiêu đang theo dõi"
-        business_css = "risk-watch" if business_status.startswith("Cần") else "risk-low"
+        ):
+            business_status = "Cần cải thiện / xác minh"
+            business_css = "risk-watch"
+        else:
+            business_status = "Không có biến động giảm vượt ngưỡng"
+            business_css = "risk-low"
         if revenue_change is not None:
             business_detail = f"Doanh thu: {revenue_change:+.1f}% so với kỳ trước"
         else:
@@ -1911,7 +1918,10 @@ with tab_overview:
             f'</div>',
             unsafe_allow_html=True
         )
-        st.caption(f"Dòng cần bổ sung/không nhận diện: {unknown_count}.")
+        st.caption(
+            f"Dòng cần bổ sung/không nhận diện trong kỳ: {period_unknown_count}; "
+            f"dòng thiếu ngày chứng từ trong toàn bộ dữ liệu: {undated_count}."
+        )
 
     st.markdown("### Nhận xét tự động")
     if not auto_comments:
