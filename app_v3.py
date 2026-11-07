@@ -875,6 +875,257 @@ monthly_sales = (
     .sort_values("_thang")
 )
 
+# ============================================================
+# MONTHLY CUSTOMER BEHAVIOR / BUSINESS SHIFT ANALYSIS
+# ============================================================
+
+month_list = sorted(sales.loc[sales["_thang"].ne(""), "_thang"].dropna().unique().tolist())
+monthly_customer = (
+    sales[sales["_thang"].ne("")]
+    .groupby(["_customer_key", "_ten_kh", "_thang"], as_index=False)
+    .agg(
+        Doanh_thu=("_doanh_thu", "sum"),
+        San_luong=("_san_luong", "sum"),
+        So_chung_tu=("_chung_tu", "nunique"),
+    )
+)
+
+# Monthly panel inserts zero-sales months so inactivity is visible.
+if month_list:
+    customer_index = sales[["_customer_key", "_ten_kh"]].drop_duplicates()
+    panel_index = customer_index.assign(_join=1).merge(
+        pd.DataFrame({"_thang": month_list, "_join": 1}),
+        on="_join"
+    ).drop(columns="_join")
+    monthly_panel = panel_index.merge(
+        monthly_customer,
+        on=["_customer_key", "_ten_kh", "_thang"],
+        how="left"
+    )
+    for metric in ["Doanh_thu", "San_luong", "So_chung_tu"]:
+        monthly_panel[metric] = monthly_panel[metric].fillna(0)
+else:
+    monthly_panel = pd.DataFrame()
+
+# User selects a break month: before/after comparison mirrors business review periods,
+# e.g. Jan-May versus Jun-Nov. Default is the midpoint of available months.
+if len(month_list) >= 2:
+    default_cut_index = max(0, min(len(month_list) - 2, 4))
+    with st.sidebar:
+        st.markdown("## 5. SO SÁNH BIẾN ĐỘNG")
+        split_month = st.selectbox(
+            "Tháng kết thúc kỳ trước",
+            options=month_list[:-1],
+            index=default_cut_index,
+            help="Ví dụ chọn tháng 05 để so sánh bình quân tháng 01-05 với tháng 06-11."
+        )
+        decline_threshold = st.slider(
+            "Ngưỡng giảm doanh thu/sản lượng (%)",
+            min_value=20, max_value=90, value=50, step=5
+        )
+        growth_threshold = st.slider(
+            "Ngưỡng tăng doanh thu/sản lượng (%)",
+            min_value=50, max_value=300, value=100, step=25
+        )
+    split_index = month_list.index(split_month)
+    prior_months = month_list[:split_index + 1]
+    later_months = month_list[split_index + 1:]
+else:
+    split_month = month_list[0] if month_list else ""
+    prior_months = month_list
+    later_months = []
+    decline_threshold = 50
+    growth_threshold = 100
+
+# Compare averages per calendar month, not only active months.
+# This makes the "active before, quiet later" pattern visible.
+period_rows = []
+if not monthly_panel.empty and prior_months and later_months:
+    for key, group in monthly_panel.groupby(["_customer_key", "_ten_kh"], sort=False):
+        before = group[group["_thang"].isin(prior_months)]
+        after = group[group["_thang"].isin(later_months)]
+        before_rev = float(before["Doanh_thu"].sum())
+        after_rev = float(after["Doanh_thu"].sum())
+        before_qty = float(before["San_luong"].sum())
+        after_qty = float(after["San_luong"].sum())
+        before_rev_avg = before_rev / len(prior_months)
+        after_rev_avg = after_rev / len(later_months)
+        before_qty_avg = before_qty / len(prior_months)
+        after_qty_avg = after_qty / len(later_months)
+
+        rev_change = (
+            (after_rev_avg / before_rev_avg - 1) * 100
+            if before_rev_avg > 0 else np.nan
+        )
+        qty_change = (
+            (after_qty_avg / before_qty_avg - 1) * 100
+            if before_qty_avg > 0 else np.nan
+        )
+        prior_active = int((before["San_luong"] > 0).sum())
+        later_active = int((after["San_luong"] > 0).sum())
+
+        if before_qty > 0 and after_qty == 0:
+            pattern = "Ngừng lấy hàng trong kỳ sau"
+        elif before_qty_avg > 0 and (
+            (pd.notna(qty_change) and qty_change <= -decline_threshold)
+            or (pd.notna(rev_change) and rev_change <= -decline_threshold)
+        ):
+            pattern = "Giảm mạnh so với kỳ trước"
+        elif before_qty == 0 and after_qty > 0:
+            pattern = "Mới phát sinh / quay lại mua hàng"
+        elif before_qty_avg > 0 and (
+            (pd.notna(qty_change) and qty_change >= growth_threshold)
+            or (pd.notna(rev_change) and rev_change >= growth_threshold)
+        ):
+            pattern = "Tăng mạnh so với kỳ trước"
+        else:
+            pattern = "Tương đối ổn định"
+
+        period_rows.append({
+            "_customer_key": key[0],
+            "NPP": key[1],
+            "Tháng kết thúc kỳ trước": split_month,
+            "Số tháng kỳ trước": len(prior_months),
+            "Số tháng kỳ sau": len(later_months),
+            "Doanh thu kỳ trước": before_rev,
+            "Doanh thu kỳ sau": after_rev,
+            "DT bình quân/tháng trước": before_rev_avg,
+            "DT bình quân/tháng sau": after_rev_avg,
+            "Biến động doanh thu %": rev_change,
+            "Sản lượng kỳ trước": before_qty,
+            "Sản lượng kỳ sau": after_qty,
+            "SL bình quân/tháng trước": before_qty_avg,
+            "SL bình quân/tháng sau": after_qty_avg,
+            "Biến động sản lượng %": qty_change,
+            "Số tháng có lấy hàng kỳ trước": prior_active,
+            "Số tháng có lấy hàng kỳ sau": later_active,
+            "Mẫu hình": pattern,
+        })
+
+customer_monthly_review = pd.DataFrame(period_rows)
+
+# Same product + same region: identify potential offsetting volume changes
+# between distributors. This is only a review lead, not proof of customer transfer.
+product_shift_rows = []
+if not monthly_panel.empty and prior_months and later_months and not sales.empty:
+    p = sales[
+        sales["_ma_hang"].ne("")
+        & sales["_ma_hang_z"].eq(False)
+        & sales["_vung"].ne("Chưa xác định vùng")
+    ].copy()
+
+    if not p.empty:
+        sku_period = (
+            p.groupby(
+                ["_vung", "_ma_hang", "_ten_hang", "_customer_key", "_ten_kh", "_thang"],
+                as_index=False
+            )["_san_luong"].sum()
+        )
+        sku_period["_ky"] = np.where(
+            sku_period["_thang"].isin(prior_months), "Trước",
+            np.where(sku_period["_thang"].isin(later_months), "Sau", "Ngoài kỳ")
+        )
+        sku_period = sku_period[sku_period["_ky"].isin(["Trước", "Sau"])]
+        sku_compare = (
+            sku_period.groupby(
+                ["_vung", "_ma_hang", "_ten_hang", "_customer_key", "_ten_kh", "_ky"],
+                as_index=False
+            )["_san_luong"].sum()
+        )
+        sku_pivot = sku_compare.pivot_table(
+            index=["_vung", "_ma_hang", "_ten_hang", "_customer_key", "_ten_kh"],
+            columns="_ky", values="_san_luong", aggfunc="sum", fill_value=0
+        ).reset_index()
+        if "Trước" not in sku_pivot.columns:
+            sku_pivot["Trước"] = 0.0
+        if "Sau" not in sku_pivot.columns:
+            sku_pivot["Sau"] = 0.0
+
+        sku_pivot["Chênh lệch SL"] = sku_pivot["Sau"] - sku_pivot["Trước"]
+        sku_pivot["Tỷ lệ biến động %"] = np.where(
+            sku_pivot["Trước"] > 0,
+            (sku_pivot["Sau"] / sku_pivot["Trước"] - 1) * 100,
+            np.nan
+        )
+        decreases = sku_pivot[
+            (sku_pivot["Trước"] > 0)
+            & (sku_pivot["Sau"] <= sku_pivot["Trước"] * (1 - decline_threshold / 100))
+        ].copy()
+        increases = sku_pivot[
+            (sku_pivot["Sau"] > 0)
+            & (
+                (sku_pivot["Trước"] == 0)
+                | (sku_pivot["Sau"] >= sku_pivot["Trước"] * (1 + growth_threshold / 100))
+            )
+        ].copy()
+
+        # Limit the number of pairs and work only within the same region/SKU.
+        if not decreases.empty and not increases.empty:
+            pairs = decreases.merge(
+                increases,
+                on=["_vung", "_ma_hang"],
+                suffixes=("_A", "_B"),
+                how="inner"
+            )
+            pairs = pairs[pairs["_customer_key_A"] != pairs["_customer_key_B"]].copy()
+            if not pairs.empty:
+                pairs["Sản lượng NPP A giảm"] = pairs["Trước_A"] - pairs["Sau_A"]
+                pairs["Sản lượng NPP B tăng"] = pairs["Sau_B"] - pairs["Trước_B"]
+                pairs["Mức bù trừ tương đối %"] = np.where(
+                    pairs["Sản lượng NPP A giảm"] > 0,
+                    np.minimum(
+                        pairs["Sản lượng NPP B tăng"] / pairs["Sản lượng NPP A giảm"],
+                        1.0
+                    ) * 100,
+                    0
+                )
+                pairs = pairs.sort_values(
+                    ["Mức bù trừ tương đối %", "Sản lượng NPP A giảm"],
+                    ascending=False
+                ).head(500)
+
+                for _, row in pairs.iterrows():
+                    product_shift_rows.append({
+                        "Vùng": row["_vung"],
+                        "Mã hàng": row["_ma_hang"],
+                        "Tên hàng": row["_ten_hang_A"] or row["_ten_hang_B"],
+                        "NPP giảm": row["_ten_kh_A"],
+                        "NPP tăng": row["_ten_kh_B"],
+                        "SL NPP giảm kỳ trước": row["Trước_A"],
+                        "SL NPP giảm kỳ sau": row["Sau_A"],
+                        "SL NPP tăng kỳ trước": row["Trước_B"],
+                        "SL NPP tăng kỳ sau": row["Sau_B"],
+                        "SL giảm của A": row["Sản lượng NPP A giảm"],
+                        "SL tăng của B": row["Sản lượng NPP B tăng"],
+                        "Mức bù trừ tương đối %": row["Mức bù trừ tương đối %"],
+                        "Nhận định": "Cùng mặt hàng và vùng có NPP giảm mạnh trong khi NPP khác tăng/mới phát sinh; cần kiểm tra phân bổ thị trường, điều chuyển khách hàng và chương trình kinh doanh.",
+                    })
+
+product_shift_review = pd.DataFrame(product_shift_rows)
+
+# Summarize monthly risk signals by distributor.
+if not customer_monthly_review.empty:
+    customer_monthly_review["Co_giam_manh"] = customer_monthly_review["Mẫu hình"].isin([
+        "Giảm mạnh so với kỳ trước", "Ngừng lấy hàng trong kỳ sau"
+    ])
+    customer_monthly_review["Co_tang_manh_hoac_quay_lai"] = customer_monthly_review["Mẫu hình"].isin([
+        "Tăng mạnh so với kỳ trước", "Mới phát sinh / quay lại mua hàng"
+    ])
+    monthly_decline_map = customer_monthly_review.set_index("_customer_key")["Co_giam_manh"]
+    monthly_growth_map = customer_monthly_review.set_index("_customer_key")["Co_tang_manh_hoac_quay_lai"]
+else:
+    monthly_decline_map = pd.Series(dtype=bool)
+    monthly_growth_map = pd.Series(dtype=bool)
+
+if not product_shift_review.empty:
+    pair_names = pd.concat([
+        product_shift_review[["NPP giảm"]].rename(columns={"NPP giảm": "NPP"}),
+        product_shift_review[["NPP tăng"]].rename(columns={"NPP tăng": "NPP"})
+    ], ignore_index=True)
+    shift_name_set = set(pair_names["NPP"].dropna())
+else:
+    shift_name_set = set()
+
 # Unrecognized data are isolated and not treated as confirmed risk.
 unknown_parts = []
 for label, mask, reason in [
@@ -923,7 +1174,22 @@ for _, row in customer_summary.iterrows():
     day_n = int(vehicle_day_by_customer.get(key, 0))
     period_n = int(vehicle_period_by_customer.get(key, 0))
     addr_n = int(address_by_customer.get(key, 0))
-    score = min(100, min(40, wh_n * 10) + min(30, day_n * 15) + min(20, period_n * 5) + min(10, addr_n * 10))
+    monthly_row = (
+        customer_monthly_review[customer_monthly_review["_customer_key"] == key].iloc[0]
+        if not customer_monthly_review.empty and (customer_monthly_review["_customer_key"] == key).any()
+        else None
+    )
+    monthly_pattern = monthly_row["Mẫu hình"] if monthly_row is not None else "Chưa đủ tháng để so sánh"
+    monthly_decline = bool(monthly_row["Co_giam_manh"]) if monthly_row is not None and "Co_giam_manh" in monthly_row.index else False
+    monthly_growth = bool(monthly_row["Co_tang_manh_hoac_quay_lai"]) if monthly_row is not None and "Co_tang_manh_hoac_quay_lai" in monthly_row.index else False
+    product_shift = row["_ten_kh"] in shift_name_set
+    # Transparent 100-point screening model. A single business trend alone
+    # cannot make an NPP critical; combined independent signals increase priority.
+    score = min(25, wh_n * 5) + min(15, day_n * 5) + min(15, period_n * 3) + min(10, addr_n * 5)
+    score += 10 if monthly_decline else 0
+    score += 5 if monthly_growth else 0
+    score += 15 if product_shift else 0
+    score = min(100, score)
     has_critical_fields = (
         mapped["customer_type"] is not None
         and mapped["address"] is not None
@@ -959,6 +1225,23 @@ for _, row in customer_summary.iterrows():
     if addr_n:
         reasons.append("Có địa chỉ trùng với NPP khác.")
         actions.append("Đối chiếu hồ sơ pháp lý, địa điểm kinh doanh và xác minh thực tế.")
+    if monthly_decline:
+        reasons.append(
+            f"Biến động kinh doanh: {monthly_pattern}; doanh thu kỳ trước {monthly_row['Doanh thu kỳ trước']:,.0f}, "
+            f"kỳ sau {monthly_row['Doanh thu kỳ sau']:,.0f}; sản lượng kỳ trước {monthly_row['Sản lượng kỳ trước']:,.0f}, "
+            f"kỳ sau {monthly_row['Sản lượng kỳ sau']:,.0f}."
+        )
+        actions.append("Kiểm tra nguyên nhân sụt giảm: thay đổi địa bàn, mất khách, tồn kho, công nợ, nguồn cung, chính sách bán hàng hoặc thay đổi nhà phân phối.")
+    elif monthly_growth:
+        reasons.append(
+            f"Biến động kinh doanh: {monthly_pattern}; doanh thu kỳ trước {monthly_row['Doanh thu kỳ trước']:,.0f}, "
+            f"kỳ sau {monthly_row['Doanh thu kỳ sau']:,.0f}; sản lượng kỳ trước {monthly_row['Sản lượng kỳ trước']:,.0f}, "
+            f"kỳ sau {monthly_row['Sản lượng kỳ sau']:,.0f}."
+        )
+        actions.append("Kiểm tra năng lực tiêu thụ, tồn kho, đơn đặt hàng, hạn mức công nợ và tính bền vững của mức tăng.")
+    if product_shift:
+        reasons.append("Có mặt trong nhóm cặp NPP cùng vùng/cùng mặt hàng nhưng biến động sản lượng trái chiều.")
+        actions.append("Đối chiếu khu vực phụ trách, khách hàng cuối, chính sách bán hàng và khả năng chuyển dịch đơn hàng giữa các NPP.")
     if not reasons:
         reasons.append("Chưa ghi nhận tín hiệu thuộc các quy tắc sàng lọc hiện tại.")
     if not actions:
@@ -973,6 +1256,9 @@ for _, row in customer_summary.iterrows():
         "Dòng xe dùng chung cùng ngày": day_n,
         "Dòng xe dùng chung nhiều ngày": period_n,
         "Dòng địa chỉ trùng": addr_n,
+        "Mẫu hình doanh thu/sản lượng": monthly_pattern,
+        "Biến động kinh doanh cần kiểm tra": monthly_decline or monthly_growth,
+        "Liên quan dịch chuyển mặt hàng": product_shift,
         "Nhận định": " ".join(reasons),
         "Hướng xử lý": " ".join(actions),
     })
