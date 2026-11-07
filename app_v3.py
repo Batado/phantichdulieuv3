@@ -31,19 +31,19 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
 html, body, [class*="css"] {font-family:'Be Vietnam Pro',sans-serif;}
-[data-testid="stAppViewContainer"] {background:#081321;}
-[data-testid="stHeader"] {background:transparent;}
-section[data-testid="stSidebar"] {background:#0c1b2d;}
-.main-title {font-size:28px;font-weight:800;color:#eaf2ff;margin-bottom:2px;}
-.sub-title {font-size:12px;color:#8ea6c2;margin-bottom:18px;}
-.section-title {color:#8fc1ff;font-size:14px;font-weight:800;margin:16px 0 8px;}
-.risk-card {padding:12px 14px;border-radius:9px;margin:4px 0;}
-.risk-low {background:#102d22;color:#a7f3d0;border-left:4px solid #22c55e;}
-.risk-watch {background:#39320f;color:#fff0a8;border-left:4px solid #eab308;}
-.risk-high {background:#3b2814;color:#ffd199;border-left:4px solid #f97316;}
-.risk-critical {background:#39191c;color:#ffb5b5;border-left:4px solid #ef4444;}
-.risk-unknown {background:#1b2939;color:#cbd5e1;border-left:4px solid #94a3b8;}
-div[data-testid="stMetric"] {background:#101f31;padding:12px;border-radius:10px;border:1px solid #1e344d;}
+[data-testid="stAppViewContainer"] {background:#f7f9fc;color:#1f2937;}
+[data-testid="stHeader"] {background:rgba(255,255,255,.92);}
+section[data-testid="stSidebar"] {background:#f1f5f9;border-right:1px solid #dbe3ed;}
+.main-title {font-size:28px;font-weight:800;color:#172b4d;margin-bottom:2px;}
+.sub-title {font-size:12px;color:#64748b;margin-bottom:18px;}
+.section-title {color:#284f75;font-size:14px;font-weight:800;margin:16px 0 8px;}
+.risk-card {padding:12px 14px;border-radius:8px;margin:4px 0;border:1px solid #dbe3ed;}
+.risk-low {background:#effaf3;color:#176b3a;border-left:4px solid #22a06b;}
+.risk-watch {background:#fff9e8;color:#8a5a00;border-left:4px solid #e0a100;}
+.risk-high {background:#fff3e8;color:#994d00;border-left:4px solid #f97316;}
+.risk-critical {background:#fff0f0;color:#a12a2a;border-left:4px solid #d92d20;}
+.risk-unknown {background:#f1f5f9;color:#475569;border-left:4px solid #94a3b8;}
+div[data-testid="stMetric"] {background:#fff;padding:12px;border-radius:9px;border:1px solid #dbe3ed;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -763,7 +763,6 @@ with value_col:
     selected_period_value = st.selectbox(
         "Kỳ đang đánh giá",
         period_values,
-        index=period_values.index(st.session_state[period_select_key]),
         key=period_select_key,
         format_func=lambda x: (
             f"Tuần {x.split('-W')[-1]}/{x.split('-W')[0]}"
@@ -1688,12 +1687,17 @@ abnormal_document_count = (
     ][["_customer_key", "_chung_tu"]].drop_duplicates().shape[0]
     if not warehouse_period.empty else 0
 )
+report_months = set(filtered["_thang"].dropna().astype(str).unique())
+monthly_anomalies_period = (
+    monthly_anomalies[monthly_anomalies["Tháng bất thường"].astype(str).isin(report_months)].copy()
+    if not monthly_anomalies.empty else pd.DataFrame()
+)
 abnormal_signal_count = (
     abnormal_document_count
     + len(vehicle_day_shared)
     + len(vehicle_period_shared)
     + len(address_shared)
-    + len(monthly_anomalies)
+    + len(monthly_anomalies_period)
 )
 high_risk = int(risk_summary["Mức độ"].isin(["Cao", "Rất cao"]).sum()) if not risk_summary.empty else 0
 
@@ -1767,11 +1771,11 @@ if not product_shift_review.empty:
         f"Có {len(product_shift_review)} cặp NPP cùng vùng/cùng mã hàng biến động trái chiều. Cần kiểm tra địa bàn phân phối, khách hàng cuối và điều chuyển."
     ))
 
-if not monthly_anomalies.empty:
+if not monthly_anomalies_period.empty:
     auto_comments.append((
         "warning",
         "Biến động đột ngột theo tháng",
-        f"Ghi nhận {len(monthly_anomalies)} tháng có doanh thu hoặc sản lượng tăng/giảm đột ngột so với 3 tháng liền trước trong dữ liệu lịch sử."
+        f"Trong kỳ báo cáo có {len(monthly_anomalies_period)} tháng phát sinh doanh thu hoặc sản lượng tăng/giảm đột ngột so với 3 tháng liền trước."
     ))
 
 if unknown_count:
@@ -1843,12 +1847,14 @@ with tab_overview:
             or inactive_npp_count > 0
         ) else "Ổn định theo chỉ tiêu đang theo dõi"
         business_css = "risk-watch" if business_status.startswith("Cần") else "risk-low"
+        if revenue_change is not None:
+            business_detail = f"Doanh thu: {revenue_change:+.1f}% so với kỳ trước"
+        else:
+            business_detail = "Chưa có dữ liệu kỳ trước để so sánh doanh thu."
         st.markdown(
             f'<div class="risk-card {business_css}"><b>HIỆU QUẢ KINH DOANH</b><br>'
-            f'<b>{business_status}</b><br>'
-            f'Doanh thu: {revenue_change:+.1f}% so với kỳ trước' if revenue_change is not None
-            else f'<div class="risk-card risk-unknown"><b>HIỆU QUẢ KINH DOANH</b><br>Chưa đủ kỳ trước để so sánh'
-            , unsafe_allow_html=True
+            f'<b>{business_status}</b><br>{business_detail}</div>',
+            unsafe_allow_html=True
         )
         st.caption(f"NPP ngừng giao dịch: {inactive_npp_count}; NPP mới phát sinh: {new_npp_count}.")
     with warehouse_col:
@@ -1860,13 +1866,17 @@ with tab_overview:
             status_text, css_class = "Cần theo dõi", "risk-watch"
         else:
             status_text, css_class = "Chưa đủ dữ liệu", "risk-unknown"
+        if warehouse_comparable:
+            warehouse_detail = (
+                f"{warehouse_fit_pct:.1f}% phù hợp trực tiếp; "
+                f"{warehouse_bad_events} sự kiện ngoài danh sách"
+            )
+        else:
+            warehouse_detail = "Chưa đủ giao dịch có thể đối chiếu."
         st.markdown(
             f'<div class="risk-card {css_class}"><b>KHO LẤY HÀNG</b><br>'
-            f'<b>{status_text}</b><br>'
-            f'{warehouse_fit_pct:.1f}% phù hợp trực tiếp; {warehouse_bad_events} sự kiện ngoài danh sách'
-            if warehouse_comparable else
-            f'<div class="risk-card risk-unknown"><b>KHO LẤY HÀNG</b><br>Chưa đủ giao dịch để đánh giá'
-            , unsafe_allow_html=True
+            f'<b>{status_text}</b><br>{warehouse_detail}</div>',
+            unsafe_allow_html=True
         )
         st.caption(
             f"Phù hợp trực tiếp: {good_warehouse_events}; dự phòng cần xác minh: "
