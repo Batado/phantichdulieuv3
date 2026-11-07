@@ -1300,12 +1300,24 @@ for _, row in customer_summary.iterrows():
     product_shift = key in shift_key_set
     month_anomaly_n = int(monthly_anomaly_count.get(key, 0))
     # Transparent screening score. A single sales trend alone is not fraud evidence.
-    score = min(25, wh_n * 5) + min(15, day_n * 5) + min(15, period_n * 3) + min(10, addr_n * 5)
-    score += 10 if monthly_decline else 0
-    score += 5 if monthly_growth else 0
-    score += 15 if product_shift else 0
-    score += min(5, month_anomaly_n * 2)
-    score = min(100, score)
+    points_warehouse = min(25, wh_n * 5)
+    points_vehicle_same_day = min(15, day_n * 5)
+    points_vehicle_period = min(15, period_n * 3)
+    points_shared_address = min(10, addr_n * 5)
+    points_monthly_decline = 10 if monthly_decline else 0
+    points_monthly_growth = 5 if monthly_growth else 0
+    points_product_shift = 15 if product_shift else 0
+    points_monthly_spikes = min(5, month_anomaly_n * 2)
+    score = min(100, sum([
+        points_warehouse,
+        points_vehicle_same_day,
+        points_vehicle_period,
+        points_shared_address,
+        points_monthly_decline,
+        points_monthly_growth,
+        points_product_shift,
+        points_monthly_spikes,
+    ]))
     has_critical_fields = (
         mapped["customer_type"] is not None
         and mapped["address"] is not None
@@ -1404,6 +1416,14 @@ for _, row in customer_summary.iterrows():
         "Điểm sàng lọc": score,
         "Mức độ": level,
         "Độ phủ dữ liệu": coverage,
+        "Điểm kho": points_warehouse,
+        "Điểm xe cùng ngày": points_vehicle_same_day,
+        "Điểm xe nhiều ngày": points_vehicle_period,
+        "Điểm địa chỉ trùng": points_shared_address,
+        "Điểm giảm/ngừng mua": points_monthly_decline,
+        "Điểm tăng/quay lại": points_monthly_growth,
+        "Điểm dịch chuyển mặt hàng": points_product_shift,
+        "Điểm biến động từng tháng": points_monthly_spikes,
         "Dòng kho ngoài danh sách": wh_n,
         "Dòng xe dùng chung cùng ngày": day_n,
         "Dòng xe dùng chung nhiều ngày": period_n,
@@ -1775,7 +1795,7 @@ with tab_vehicle:
 
 with tab_risk:
     st.markdown('<div class="section-title">BẢNG ĐÁNH GIÁ VÀ NHẬN ĐỊNH RỦI RO NPP</div>', unsafe_allow_html=True)
-    st.caption("Điểm là mức ưu tiên sàng lọc theo các tín hiệu quan sát được; không phải kết luận vi phạm.")
+    st.caption("Điểm là mức ưu tiên sàng lọc theo các tín hiệu quan sát được; không phải kết luận vi phạm. Bảng hiển thị riêng điểm từng nhóm để có thể truy nguyên lý do.")
     if risk_summary.empty:
         st.info("Không có dữ liệu để lập bảng đánh giá.")
     else:
