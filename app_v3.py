@@ -879,7 +879,15 @@ monthly_sales = (
 # MONTHLY CUSTOMER BEHAVIOR / BUSINESS SHIFT ANALYSIS
 # ============================================================
 
-month_list = sorted(sales.loc[sales["_thang"].ne(""), "_thang"].dropna().unique().tolist())
+valid_sales_dates = sales["_ngay"].dropna() if "_ngay" in sales.columns else pd.Series(dtype="datetime64[ns]")
+month_list = (
+    pd.period_range(
+        valid_sales_dates.min().to_period("M"),
+        valid_sales_dates.max().to_period("M"),
+        freq="M"
+    ).astype(str).tolist()
+    if not valid_sales_dates.empty else []
+)
 monthly_customer = (
     sales[sales["_thang"].ne("")]
     .groupby(["_customer_key", "_ten_kh", "_thang"], as_index=False)
@@ -1059,6 +1067,25 @@ if not monthly_panel.empty and prior_months and later_months and not sales.empty
             )
         ].copy()
 
+        # Keep only the strongest 5 decreases and 5 increases per region/SKU
+        # to bound join size and keep Streamlit responsive on larger workbooks.
+        if not decreases.empty:
+            decreases = (
+                decreases.assign(_drop_qty=decreases["Trước"] - decreases["Sau"])
+                .sort_values("_drop_qty", ascending=False)
+                .groupby(["_vung", "_ma_hang"], group_keys=False)
+                .head(5)
+                .drop(columns="_drop_qty")
+            )
+        if not increases.empty:
+            increases = (
+                increases.assign(_rise_qty=increases["Sau"] - increases["Trước"])
+                .sort_values("_rise_qty", ascending=False)
+                .groupby(["_vung", "_ma_hang"], group_keys=False)
+                .head(5)
+                .drop(columns="_rise_qty")
+            )
+
         # Limit the number of pairs and work only within the same region/SKU.
         if not decreases.empty and not increases.empty:
             pairs = decreases.merge(
@@ -1086,6 +1113,8 @@ if not monthly_panel.empty and prior_months and later_months and not sales.empty
 
                 for _, row in pairs.iterrows():
                     product_shift_rows.append({
+                        "_customer_key_A": row["_customer_key_A"],
+                        "_customer_key_B": row["_customer_key_B"],
                         "Vùng": row["_vung"],
                         "Mã hàng": row["_ma_hang"],
                         "Tên hàng": row["_ten_hang_A"] or row["_ten_hang_B"],
@@ -1162,13 +1191,11 @@ else:
     monthly_growth_map = pd.Series(dtype=bool)
 
 if not product_shift_review.empty:
-    pair_names = pd.concat([
-        product_shift_review[["NPP giảm"]].rename(columns={"NPP giảm": "NPP"}),
-        product_shift_review[["NPP tăng"]].rename(columns={"NPP tăng": "NPP"})
-    ], ignore_index=True)
-    shift_name_set = set(pair_names["NPP"].dropna())
+    shift_key_set = set(product_shift_review["_customer_key_A"].dropna()) | set(
+        product_shift_review["_customer_key_B"].dropna()
+    )
 else:
-    shift_name_set = set()
+    shift_key_set = set()
 
 monthly_anomaly_count = (
     monthly_anomalies.groupby("_customer_key").size()
@@ -1246,7 +1273,7 @@ for _, row in customer_summary.iterrows():
     monthly_pattern = monthly_row["Mẫu hình"] if monthly_row is not None else "Chưa đủ tháng để so sánh"
     monthly_decline = bool(monthly_row["Co_giam_manh"]) if monthly_row is not None and "Co_giam_manh" in monthly_row.index else False
     monthly_growth = bool(monthly_row["Co_tang_manh_hoac_quay_lai"]) if monthly_row is not None and "Co_tang_manh_hoac_quay_lai" in monthly_row.index else False
-    product_shift = row["_ten_kh"] in shift_name_set
+    product_shift = key in shift_key_set
     month_anomaly_n = int(monthly_anomaly_count.get(key, 0))
     # Transparent screening score. A single sales trend alone is not fraud evidence.
     score = min(25, wh_n * 5) + min(15, day_n * 5) + min(15, period_n * 3) + min(10, addr_n * 5)
@@ -1379,7 +1406,7 @@ with tab_overview:
                 st.info("Chưa nhận diện được ngày để tổng hợp doanh thu theo tháng.")
         st.markdown("### NPP cần ưu tiên xác minh")
         st.dataframe(
-            risk_summary[["NPP", "Điểm sàng lọc", "Mức độ", "Dòng kho ngoài danh sách", "Dòng xe dùng chung cùng ngày", "Dòng xe dùng chung nhiều ngày", "Mẫu hình doanh thu/sản lượng", "Liên quan dịch chuyển mặt hàng", "Nhận định"]],
+            risk_summary[["NPP", "Điểm sàng lọc", "Mức độ", "Dòng kho ngoài danh sách", "Dòng xe dùng chung cùng ngày", "Dòng xe dùng chung nhiều ngày", "Mẫu hình doanh thu/sản lượng", "Liên quan dịch chuyển mặt hàng", "Số tháng biến động đột ngột", "Nhận định"]],
             use_container_width=True, hide_index=True
         )
     st.markdown("### Danh mục mã kho và tên kho")
@@ -1536,6 +1563,21 @@ with tab_monthly:
                         "So_chung_tu": "Số chứng từ"
                     }
                 ),
+                use_container_width=True,
+                hide_index=True
+            )
+
+        st.markdown("### Bất thường tăng/giảm đột ngột trong từng tháng")
+        if monthly_anomalies.empty:
+            st.success("Chưa phát hiện tháng có doanh thu/sản lượng biến động từ 3 lần hoặc giảm xuống 20% trở xuống so với trung vị 3 tháng trước.")
+        else:
+            st.dataframe(
+                monthly_anomalies[[
+                    "NPP", "Tháng bất thường", "Loại bất thường",
+                    "Sản lượng tháng", "Trung vị sản lượng 3 tháng trước",
+                    "Biến động sản lượng %", "Doanh thu tháng",
+                    "Trung vị doanh thu 3 tháng trước", "Biến động doanh thu %"
+                ]],
                 use_container_width=True,
                 hide_index=True
             )
@@ -1765,6 +1807,16 @@ st.markdown("---")
 st.markdown('<div class="section-title">TẢI KẾT QUẢ PHÂN TÍCH</div>', unsafe_allow_html=True)
 
 export_rows = filtered.copy()
+sensitive_value_columns = [
+    col for col in export_rows.columns
+    if any(token in norm(col) for token in [
+        "gia ban", "don gia", "gia von", "loi nhuan",
+        "bien loi nhuan", "profit", "unit price", "cost price"
+    ])
+]
+if sensitive_value_columns:
+    export_rows = export_rows.drop(columns=sensitive_value_columns, errors="ignore")
+
 export_sheets = {
     "Tong_hop_rui_ro": risk_summary,
     "Doanh_thu_mat_hang": product_summary,
