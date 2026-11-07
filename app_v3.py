@@ -1284,8 +1284,9 @@ k3.metric("Sản lượng", f"{total_qty:,.2f}")
 k4.metric("NPP rủi ro cao", f"{high_risk:,}")
 k5.metric("Dòng chưa nhận diện", f"{unknown_count:,}")
 
-tab_overview, tab_sales, tab_warehouse, tab_vehicle, tab_risk, tab_unknown = st.tabs([
-    "Tổng quan", "Doanh thu & mặt hàng", "Kho lấy hàng", "Xe khách hàng", "Đánh giá rủi ro", "Chưa nhận diện"
+tab_overview, tab_sales, tab_monthly, tab_warehouse, tab_vehicle, tab_risk, tab_unknown = st.tabs([
+    "Tổng quan", "Doanh thu & mặt hàng", "Biến động theo tháng",
+    "Kho lấy hàng", "Xe khách hàng", "Đánh giá rủi ro", "Chưa nhận diện"
 ])
 
 with tab_overview:
@@ -1309,7 +1310,7 @@ with tab_overview:
                 st.info("Chưa nhận diện được ngày để tổng hợp doanh thu theo tháng.")
         st.markdown("### NPP cần ưu tiên xác minh")
         st.dataframe(
-            risk_summary[["NPP", "Điểm sàng lọc", "Mức độ", "Dòng kho ngoài danh sách", "Dòng xe dùng chung cùng ngày", "Dòng xe dùng chung nhiều ngày", "Nhận định"]],
+            risk_summary[["NPP", "Điểm sàng lọc", "Mức độ", "Dòng kho ngoài danh sách", "Dòng xe dùng chung cùng ngày", "Dòng xe dùng chung nhiều ngày", "Mẫu hình doanh thu/sản lượng", "Liên quan dịch chuyển mặt hàng", "Nhận định"]],
             use_container_width=True, hide_index=True
         )
     st.markdown("### Danh mục mã kho và tên kho")
@@ -1379,6 +1380,116 @@ with tab_sales:
             st.dataframe(alerts, use_container_width=True, hide_index=True)
     else:
         st.info("Cần ít nhất 3 tháng dữ liệu để sàng lọc biến động theo xu hướng.")
+
+with tab_monthly:
+    st.markdown('<div class="section-title">BIẾN ĐỘNG DOANH THU VÀ SẢN LƯỢNG THEO NPP</div>', unsafe_allow_html=True)
+    if not prior_months or not later_months or customer_monthly_review.empty:
+        st.info("Cần ít nhất hai tháng dữ liệu và chọn được mốc chia kỳ để so sánh.")
+    else:
+        st.caption(
+            f"Kỳ trước: {prior_months[0]} đến {prior_months[-1]} | "
+            f"Kỳ sau: {later_months[0]} đến {later_months[-1]}. "
+            "So sánh bình quân theo tháng, bao gồm cả tháng không mua hàng."
+        )
+        n_decline = int(customer_monthly_review["Mẫu hình"].isin([
+            "Giảm mạnh so với kỳ trước", "Ngừng lấy hàng trong kỳ sau"
+        ]).sum())
+        n_growth = int(customer_monthly_review["Mẫu hình"].isin([
+            "Tăng mạnh so với kỳ trước", "Mới phát sinh / quay lại mua hàng"
+        ]).sum())
+        k1, k2, k3 = st.columns(3)
+        k1.metric("NPP giảm mạnh / ngừng mua", f"{n_decline:,}")
+        k2.metric("NPP tăng mạnh / quay lại", f"{n_growth:,}")
+        k3.metric("Cặp dịch chuyển cùng mặt hàng", f"{len(product_shift_review):,}")
+
+        st.markdown("### Danh sách NPP biến động đáng chú ý")
+        review_view = customer_monthly_review[
+            customer_monthly_review["Mẫu hình"] != "Tương đối ổn định"
+        ].copy()
+        if review_view.empty:
+            st.success("Chưa phát hiện NPP biến động vượt ngưỡng đã chọn.")
+        else:
+            review_view = review_view.sort_values(
+                ["Biến động sản lượng %", "Biến động doanh thu %"],
+                ascending=True,
+                na_position="last"
+            )
+            st.dataframe(
+                review_view[[
+                    "NPP", "Mẫu hình",
+                    "Doanh thu kỳ trước", "Doanh thu kỳ sau",
+                    "Biến động doanh thu %",
+                    "Sản lượng kỳ trước", "Sản lượng kỳ sau",
+                    "Biến động sản lượng %",
+                    "Số tháng có lấy hàng kỳ trước",
+                    "Số tháng có lấy hàng kỳ sau"
+                ]],
+                use_container_width=True,
+                hide_index=True
+            )
+
+        st.markdown("### Diễn biến từng tháng của NPP")
+        monthly_customer_options = sorted(
+            monthly_panel["_ten_kh"].dropna().unique().tolist()
+        ) if not monthly_panel.empty else []
+        selected_monthly_customers = st.multiselect(
+            "Chọn NPP để xem xu hướng tháng",
+            monthly_customer_options,
+            default=monthly_customer_options[:5],
+            key="monthly_customer_chart"
+        )
+        if selected_monthly_customers:
+            chart_data = monthly_panel[
+                monthly_panel["_ten_kh"].isin(selected_monthly_customers)
+            ].copy()
+            chart_metric = st.radio(
+                "Chỉ tiêu biểu đồ",
+                ["Doanh thu", "Sản lượng"],
+                horizontal=True,
+                key="monthly_chart_metric"
+            )
+            y_col = "Doanh_thu" if chart_metric == "Doanh thu" else "San_luong"
+            fig = px.line(
+                chart_data,
+                x="_thang",
+                y=y_col,
+                color="_ten_kh",
+                markers=True,
+                title=f"{chart_metric} theo tháng của NPP được chọn"
+            )
+            fig.update_layout(height=420, margin=dict(l=10, r=10, t=45, b=10))
+            st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(
+                chart_data[["_ten_kh", "_thang", "Doanh_thu", "San_luong", "So_chung_tu"]].rename(
+                    columns={
+                        "_ten_kh": "NPP", "_thang": "Tháng",
+                        "Doanh_thu": "Doanh thu", "San_luong": "Sản lượng",
+                        "So_chung_tu": "Số chứng từ"
+                    }
+                ),
+                use_container_width=True,
+                hide_index=True
+            )
+
+        st.markdown("### Dấu hiệu dịch chuyển sản lượng cùng mặt hàng và khu vực")
+        st.caption(
+            "Đây là danh sách cặp cần xác minh khi một NPP giảm mạnh, NPP khác tăng/mới phát sinh "
+            "trên cùng mã hàng và cùng vùng. Không tự động kết luận khách hàng đã chuyển giao."
+        )
+        if product_shift_review.empty:
+            st.success("Chưa phát hiện cặp NPP có biến động trái chiều vượt ngưỡng trên cùng mặt hàng và vùng.")
+        else:
+            st.warning(f"Có {len(product_shift_review):,} cặp dấu hiệu cần đối chiếu.")
+            st.dataframe(
+                product_shift_review,
+                use_container_width=True,
+                hide_index=True
+            )
+            st.write(
+                "Cách xác minh: kiểm tra thay đổi địa bàn phụ trách, khách hàng cuối, "
+                "đơn hàng, chương trình bán hàng, tồn kho, chính sách chiết khấu và quyết định "
+                "điều chuyển NPP trong cùng thời kỳ."
+            )
 
 with tab_warehouse:
     st.markdown('<div class="section-title">ĐỐI CHIẾU KHO LẤY HÀNG VỚI ĐỊA CHỈ NPP</div>', unsafe_allow_html=True)
@@ -1515,6 +1626,20 @@ with tab_risk:
                 unsafe_allow_html=True
             )
             evidence = filtered[filtered["_customer_key"] == detail["Mã khách hàng"]]
+            monthly_detail = customer_monthly_review[
+                customer_monthly_review["_customer_key"] == detail["Mã khách hàng"]
+            ] if not customer_monthly_review.empty else pd.DataFrame()
+            if not monthly_detail.empty:
+                st.markdown("### So sánh hai kỳ kinh doanh")
+                st.dataframe(
+                    monthly_detail[[
+                        "Tháng kết thúc kỳ trước", "Doanh thu kỳ trước", "Doanh thu kỳ sau",
+                        "Biến động doanh thu %", "Sản lượng kỳ trước", "Sản lượng kỳ sau",
+                        "Biến động sản lượng %", "Mẫu hình"
+                    ]],
+                    use_container_width=True,
+                    hide_index=True
+                )
             st.markdown("### Giao dịch làm căn cứ")
             st.dataframe(evidence[[
                 "_ngay", "_chung_tu", "_dia_chi", "_vung", "_ma_kho", "_ten_kho",
@@ -1575,6 +1700,9 @@ export_sheets = {
     "Tong_hop_rui_ro": risk_summary,
     "Doanh_thu_mat_hang": product_summary,
     "Theo_thang": monthly_sales,
+    "Bien_dong_NPP_theo_thang": customer_monthly_review,
+    "Cap_NPP_dich_chuyen_mat_hang": product_shift_review,
+    "Bang_panel_NPP_thang": monthly_panel,
     "Kho_can_xac_minh": warehouse_evidence,
     "Kho_HS_Home_can_xac_minh": warehouse_special,
     "Kho_chua_du_du_lieu": warehouse_unknown,
