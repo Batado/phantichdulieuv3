@@ -8,6 +8,8 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from modules.control_center import render_control_center
+
 
 # ============================================================
 # NPP BUSINESS RISK ANALYTICS - REBUILD
@@ -539,7 +541,8 @@ with st.sidebar:
     st.caption("Chọn một workbook mỗi lần phân tích để tránh cộng trùng dữ liệu giữa các báo cáo.")
 
 if uploaded is None:
-    st.info("Tải báo cáo Excel để bắt đầu phân tích.")
+    st.info("Tải báo cáo Excel để bắt đầu phân tích mới. Bạn vẫn có thể truy cập hồ sơ kiểm soát và sổ phát hiện đã lưu ở bên dưới.")
+    render_control_center(data_ready=False)
     st.stop()
 
 file_bytes = uploaded.getvalue()
@@ -1457,9 +1460,10 @@ k3.metric("Sản lượng", f"{total_qty:,.2f}")
 k4.metric("NPP rủi ro cao", f"{high_risk:,}")
 k5.metric("Dòng chưa nhận diện", f"{unknown_count:,}")
 
-tab_overview, tab_sales, tab_monthly, tab_warehouse, tab_vehicle, tab_risk, tab_unknown = st.tabs([
+tab_overview, tab_sales, tab_monthly, tab_warehouse, tab_vehicle, tab_risk, tab_control, tab_unknown = st.tabs([
     "Tổng quan", "Doanh thu & mặt hàng", "Biến động theo tháng",
-    "Kho lấy hàng", "Xe khách hàng", "Đánh giá rủi ro", "Chưa nhận diện"
+    "Kho lấy hàng", "Xe khách hàng", "Đánh giá rủi ro",
+    "Quản lý kiểm soát", "Chưa nhận diện"
 ])
 
 with tab_overview:
@@ -1881,6 +1885,31 @@ with tab_unknown:
             "_ten_kho": "Tên kho theo danh mục", "_hinh_thuc_goc": "Hình thức gốc", "_bien_so_goc": "Số xe gốc",
             "_nhom_chua_nhan_dien": "Nhóm lỗi", "_ly_do_chua_nhan_dien": "Lý do"
         }), use_container_width=True, hide_index=True)
+
+with tab_control:
+    control_data = {
+        "filtered": filtered,
+        "risk_summary": risk_summary,
+        "warehouse_evidence": warehouse_evidence,
+        "customer_vehicle": customer_vehicle,
+        "vehicle_day_shared": vehicle_day_shared,
+        "vehicle_period_shared": vehicle_period_shared,
+        "address_pairs": address_pairs,
+        "address_shared": address_shared,
+        "customer_monthly_review": customer_monthly_review,
+        "monthly_anomalies": monthly_anomalies,
+        "product_shift_review": product_shift_review,
+        "monthly_sales": monthly_sales,
+        "revenue": total_revenue,
+        "quantity": total_qty,
+        "sheet_name": selected_sheet,
+    }
+    render_control_center(
+        data_ready=True,
+        file_name=uploaded.name,
+        file_bytes=file_bytes,
+        data=control_data,
+    )
 
 # ============================================================
 # EXPORT
