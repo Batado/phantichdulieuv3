@@ -1423,16 +1423,20 @@ for _, row in customer_summary.iterrows():
         and mapped["method"] is not None
         and mapped["date"] is not None
     )
+    history_vehicle_rows = (
+        history_customer_vehicle[history_customer_vehicle["_customer_key"] == key]
+        if not history_customer_vehicle.empty else pd.DataFrame()
+    )
     coverage = sum([
-        bool(row["So_dong"]),
         bool(row["So_dia_chi"]),
         bool(row["So_kho"]),
-        bool((customer_vehicle["_customer_key"] == key).any()) if not customer_vehicle.empty else False,
+        bool(not history_vehicle_rows.empty),
+        bool(history_vehicle_rows["_doi_chieu_kho_tong_hop"].notna().any())
+            if not history_vehicle_rows.empty else False,
     ]) / 4
-    npp_vehicle_rows = (
-        customer_vehicle[customer_vehicle["_customer_key"] == key]
-        if not customer_vehicle.empty else pd.DataFrame()
-    )
+    # Use the full selected-history scope for data adequacy, while risk events
+    # (warehouse mismatch/shared vehicles) remain calculated in the report period.
+    npp_vehicle_rows = history_vehicle_rows
     has_customer_vehicle_data = not npp_vehicle_rows.empty
     has_valid_vehicle_data = (
         bool(npp_vehicle_rows["_bien_so_hop_le"].any())
@@ -1542,60 +1546,480 @@ if not risk_summary.empty:
 # DASHBOARD
 # ============================================================
 
-total_npp = filtered["_customer_key"].nunique()
-total_revenue = sales["_doanh_thu"].sum()
-total_qty = sales["_san_luong"].sum()
-high_risk = int(risk_summary["Mức độ"].isin(["Cao", "Rất cao"]).sum()) if not risk_summary.empty else 0
-unknown_count = len(unrecognized)
+# ============================================================
+# REPORT-PERIOD KPIs, DAILY CONTROL SUMMARY AND AUTO-OBSERVATIONS
+# ============================================================
 
-k1, k2, k3, k4, k5 = st.columns(5)
-k1.metric("Số NPP", f"{total_npp:,}")
-k2.metric("Doanh thu", money_fmt(total_revenue))
-k3.metric("Sản lượng", f"{total_qty:,.2f}")
-k4.metric("NPP rủi ro cao", f"{high_risk:,}")
-k5.metric("Dòng chưa nhận diện", f"{unknown_count:,}")
+def _period_sales_metrics(frame):
+    if frame is None or frame.empty:
+        return {"revenue": 0.0, "quantity": 0.0, "npp": 0, "documents": 0, "days": 0}
+    valid = frame[~frame["_ma_hang_z"]].copy()
+    return {
+        "revenue": float(valid["_doanh_thu"].sum()),
+        "quantity": float(valid["_san_luong"].sum()),
+        "npp": int(valid["_customer_key"].nunique()),
+        "documents": int(valid["_chung_tu"].replace("", np.nan).nunique()),
+        "days": int(valid["_ngay_only"].nunique()),
+    }
+
+
+def _change_pct(current, previous):
+    if previous == 0:
+        return None
+    return (current / previous - 1) * 100
+
+
+current_metrics = _period_sales_metrics(filtered)
+previous_metrics = _period_sales_metrics(comparison_filtered)
+total_npp = current_metrics["npp"]
+total_revenue = current_metrics["revenue"]
+total_qty = current_metrics["quantity"]
+high_risk = int(risk_summary["Mức độ"].isin(["Cao", "Rất cao"]).sum()) if not risk_summary.empty else 0
+
+# Warehouse pass rate is calculated from distinct NPP-document events.
+warehouse_period = customer_vehicle.copy()
+if not warehouse_period.empty:
+    warehouse_period["_event_key"] = np.where(
+        warehouse_period["_chung_tu"].ne(""),
+        warehouse_period["_customer_key"].astype(str) + "|" + warehouse_period["_chung_tu"].astype(str),
+        "ROW|" + warehouse_period["_dong_nguon"].astype(str)
+    )
+    warehouse_period = warehouse_period.drop_duplicates(
+        subset=["_customer_key", "_ngay_only", "_event_key"]
+    )
+    good_warehouse_events = int(
+        (warehouse_period["_doi_chieu_kho_tong_hop"] == "Phù hợp địa chỉ/khu vực").sum()
+    )
+    provisional_warehouse_events = int(
+        (warehouse_period["_doi_chieu_kho_tong_hop"] == WAREHOUSE_STATUS_FALLBACK).sum()
+    )
+    warehouse_bad_events = int(
+        warehouse_period["_doi_chieu_kho_tong_hop"].isin(warehouse_evidence_statuses).sum()
+    )
+    warehouse_special_events = int(
+        (warehouse_period["_doi_chieu_kho_tong_hop"] == WAREHOUSE_STATUS_SPECIAL).sum()
+    )
+    warehouse_unknown_events = len(warehouse_period) - (
+        good_warehouse_events + provisional_warehouse_events
+        + warehouse_bad_events + warehouse_special_events
+    )
+else:
+    warehouse_period = pd.DataFrame()
+    good_warehouse_events = provisional_warehouse_events = 0
+    warehouse_bad_events = warehouse_special_events = warehouse_unknown_events = 0
+
+warehouse_comparable = good_warehouse_events + warehouse_bad_events
+warehouse_fit_pct = (
+    good_warehouse_events / warehouse_comparable * 100
+    if warehouse_comparable else np.nan
+)
+
+# Period day count / operating coverage.
+period_day_count = (report_end - report_start).days + 1
+active_business_days = int(filtered["_ngay_only"].nunique())
+day_activity_pct = active_business_days / period_day_count * 100 if period_day_count else 0
+
+current_customer_keys = set(filtered["_customer_key"].dropna().astype(str))
+previous_customer_keys = set(comparison_filtered["_customer_key"].dropna().astype(str))
+new_npp_count = len(current_customer_keys - previous_customer_keys)
+inactive_npp_count = len(previous_customer_keys - current_customer_keys)
+
+revenue_change = _change_pct(total_revenue, previous_metrics["revenue"])
+quantity_change = _change_pct(total_qty, previous_metrics["quantity"])
+npp_change = _change_pct(total_npp, previous_metrics["npp"])
+
+# Daily summary: turnover/quantity and warehouse compliance counts.
+daily_sales = (
+    sales[sales["_ngay_only"].notna()]
+    .groupby("_ngay_only")
+    .agg(
+        Doanh_thu=("_doanh_thu", "sum"),
+        San_luong=("_san_luong", "sum"),
+        So_NPP=("_customer_key", "nunique"),
+        So_chung_tu=("_chung_tu", "nunique"),
+    )
+    .reset_index()
+)
+if not warehouse_period.empty:
+    daily_warehouse = (
+        warehouse_period.groupby("_ngay_only")
+        .agg(
+            Kho_phu_hop=("_doi_chieu_kho_tong_hop", lambda x: (x == "Phù hợp địa chỉ/khu vực").sum()),
+            Kho_can_xac_minh=("_doi_chieu_kho_tong_hop", lambda x: x.isin(warehouse_evidence_statuses).sum()),
+            Kho_chua_ket_luan=("_doi_chieu_kho_tong_hop", lambda x: (
+                ~x.isin(
+                    {"Phù hợp địa chỉ/khu vực", WAREHOUSE_STATUS_FALLBACK, WAREHOUSE_STATUS_SPECIAL}
+                    | warehouse_evidence_statuses
+                )
+            ).sum()),
+        )
+        .reset_index()
+    )
+else:
+    daily_warehouse = pd.DataFrame(columns=[
+        "_ngay_only", "Kho_phu_hop", "Kho_can_xac_minh", "Kho_chua_ket_luan"
+    ])
+
+daily_summary = daily_sales.merge(daily_warehouse, on="_ngay_only", how="outer")
+if daily_summary.empty:
+    daily_summary = pd.DataFrame(columns=[
+        "_ngay_only", "Doanh_thu", "San_luong", "So_NPP", "So_chung_tu",
+        "Kho_phu_hop", "Kho_can_xac_minh", "Kho_chua_ket_luan"
+    ])
+for col in [
+    "Doanh_thu", "San_luong", "So_NPP", "So_chung_tu",
+    "Kho_phu_hop", "Kho_can_xac_minh", "Kho_chua_ket_luan"
+]:
+    if col not in daily_summary.columns:
+        daily_summary[col] = 0
+    daily_summary[col] = daily_summary[col].fillna(0)
+daily_summary = daily_summary.sort_values("_ngay_only")
+daily_denominator = daily_summary["Kho_phu_hop"] + daily_summary["Kho_can_xac_minh"]
+daily_summary["Ty_le_kho_phu_hop_pct"] = np.where(
+    daily_denominator > 0,
+    daily_summary["Kho_phu_hop"] / daily_denominator * 100,
+    np.nan
+)
+
+# Count unique abnormal records for the current report period.
+abnormal_document_count = (
+    warehouse_period[
+        warehouse_period["_doi_chieu_kho_tong_hop"].isin(warehouse_evidence_statuses)
+    ][["_customer_key", "_chung_tu"]].drop_duplicates().shape[0]
+    if not warehouse_period.empty else 0
+)
+abnormal_signal_count = (
+    abnormal_document_count
+    + len(vehicle_day_shared)
+    + len(vehicle_period_shared)
+    + len(address_shared)
+    + len(monthly_anomalies)
+)
+high_risk = int(risk_summary["Mức độ"].isin(["Cao", "Rất cao"]).sum()) if not risk_summary.empty else 0
+
+# Unrecognized records in the current period plus records with no valid date.
+if not unrecognized.empty:
+    unrecognized_period = unrecognized[
+        unrecognized["_ngay"].isna()
+        | (
+            unrecognized["_ngay"].notna()
+            & (unrecognized["_ngay"].dt.date >= report_start)
+            & (unrecognized["_ngay"].dt.date <= report_end)
+        )
+    ].copy()
+else:
+    unrecognized_period = pd.DataFrame()
+unknown_count = len(unrecognized_period)
+data_quality_pct = max(0, (1 - unknown_count / max(len(filtered), 1))) * 100
+
+# Automatic comments: every sentence ties to a measurable comparison or detected event.
+auto_comments = []
+if revenue_change is None:
+    auto_comments.append(("info", "Doanh thu", "Kỳ trước không có dữ liệu doanh thu để tính tỷ lệ biến động."))
+elif revenue_change <= -30:
+    auto_comments.append(("danger", "Doanh thu giảm mạnh", f"Doanh thu giảm {abs(revenue_change):.1f}% so với kỳ trước. Cần kiểm tra NPP giảm/ngừng mua, công nợ, tồn kho, thay đổi địa bàn và nguồn cung."))
+elif revenue_change >= 50:
+    auto_comments.append(("warning", "Doanh thu tăng mạnh", f"Doanh thu tăng {revenue_change:.1f}% so với kỳ trước. Cần đối chiếu đơn hàng, tồn kho, khả năng tiêu thụ và tính bền vững của mức tăng."))
+else:
+    auto_comments.append(("info", "Doanh thu", f"Doanh thu biến động {revenue_change:+.1f}% so với kỳ trước."))
+
+if quantity_change is not None and abs(quantity_change) >= 30:
+    direction = "giảm" if quantity_change < 0 else "tăng"
+    auto_comments.append((
+        "warning" if quantity_change > 0 else "danger",
+        "Sản lượng thay đổi",
+        f"Sản lượng {direction} {abs(quantity_change):.1f}% so với kỳ trước. Nên kiểm tra cơ cấu mặt hàng, NPP biến động lớn và nhu cầu thực tế."
+    ))
+
+if inactive_npp_count:
+    auto_comments.append((
+        "danger" if inactive_npp_count >= 3 else "warning",
+        "NPP ngừng phát sinh giao dịch",
+        f"Có {inactive_npp_count} NPP từng phát sinh giao dịch ở kỳ trước nhưng không có giao dịch trong kỳ báo cáo."
+    ))
+if new_npp_count:
+    auto_comments.append((
+        "warning",
+        "NPP mới phát sinh",
+        f"Có {new_npp_count} NPP phát sinh giao dịch trong kỳ hiện tại nhưng không xuất hiện ở kỳ trước; cần kiểm tra đơn mở mới, hạn mức và hồ sơ."
+    ))
+
+if warehouse_bad_events:
+    auto_comments.append((
+        "danger" if warehouse_bad_events >= 5 else "warning",
+        "Kho lấy hàng cần xác minh",
+        f"Có {warehouse_bad_events} chứng từ/sự kiện xe khách hàng có kho ngoài ma trận địa chỉ hoặc mâu thuẫn ghi chú. Kiểm tra phiếu xuất, điều phối và phê duyệt ngoại lệ."
+    ))
+elif warehouse_comparable:
+    auto_comments.append(("success", "Đối chiếu kho", f"{warehouse_fit_pct:.1f}% sự kiện có thể so sánh phù hợp trực tiếp theo ma trận địa chỉ."))
+
+if len(vehicle_day_shared) or len(vehicle_period_shared):
+    auto_comments.append((
+        "warning",
+        "Phương tiện dùng chung",
+        f"Ghi nhận {len(vehicle_day_shared)} trường hợp xe nhiều NPP cùng ngày và {len(vehicle_period_shared)} xe liên quan nhiều NPP qua nhiều ngày. Cần đối chiếu giờ lấy hàng, chủ xe và người nhận."
+    ))
+
+if not product_shift_review.empty:
+    auto_comments.append((
+        "warning",
+        "Dấu hiệu dịch chuyển sản lượng",
+        f"Có {len(product_shift_review)} cặp NPP cùng vùng/cùng mã hàng biến động trái chiều. Cần kiểm tra địa bàn phân phối, khách hàng cuối và điều chuyển."
+    ))
+
+if not monthly_anomalies.empty:
+    auto_comments.append((
+        "warning",
+        "Biến động đột ngột theo tháng",
+        f"Ghi nhận {len(monthly_anomalies)} tháng có doanh thu hoặc sản lượng tăng/giảm đột ngột so với 3 tháng liền trước trong dữ liệu lịch sử."
+    ))
+
+if unknown_count:
+    auto_comments.append((
+        "danger" if unknown_count / max(len(filtered), 1) >= .10 else "warning",
+        "Chất lượng dữ liệu",
+        f"Có {unknown_count} dòng chưa nhận diện hoặc thiếu trường thông tin trong kỳ; cần bổ sung trước khi kết luận rủi ro."
+    ))
 
 tab_overview, tab_sales, tab_monthly, tab_warehouse, tab_vehicle, tab_risk, tab_control, tab_unknown = st.tabs([
-    "Tổng quan", "Doanh thu & mặt hàng", "Biến động theo tháng",
-    "Kho lấy hàng", "Xe khách hàng", "Đánh giá rủi ro",
-    "Quản lý kiểm soát", "Chưa nhận diện"
+    "1. Tổng quan", "2. Doanh thu & mặt hàng", "3. Biến động theo tháng",
+    "4. Kho lấy hàng", "5. Xe khách hàng", "6. Đánh giá rủi ro",
+    "7. Quản lý kiểm soát", "8. Chưa nhận diện"
 ])
 
 with tab_overview:
-    st.markdown('<div class="section-title">TỔNG QUAN RỦI RO NHÀ PHÂN PHỐI</div>', unsafe_allow_html=True)
+    period_title = (
+        f"Tuần {selected_period_value}"
+        if report_period_type == "Tuần"
+        else (f"Tháng {selected_period_value[5:7]}/{selected_period_value[:4]}" if report_period_type == "Tháng" else f"Năm {selected_period_value}")
+    )
+    st.markdown(
+        f'<div class="section-title">TỔNG QUAN KIỂM SOÁT KINH DOANH – {period_title.upper()}</div>',
+        unsafe_allow_html=True
+    )
+    st.caption(
+        f"Kỳ báo cáo: {report_start:%d/%m/%Y} – {report_end:%d/%m/%Y} "
+        f"({period_day_count} ngày); so sánh với kỳ trước "
+        f"{previous_start:%d/%m/%Y} – {previous_end:%d/%m/%Y}. "
+        "Doanh thu/mặt hàng đã loại mã hàng bắt đầu bằng Z."
+    )
+
+    def delta_label(value):
+        return "Không có kỳ trước" if value is None else f"{value:+.1f}% so với kỳ trước"
+
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.metric(
+        "Ngày có giao dịch",
+        f"{active_business_days}/{period_day_count}",
+        f"{day_activity_pct:.1f}% số ngày trong kỳ"
+    )
+    k2.metric(
+        "Doanh thu",
+        money_fmt(total_revenue),
+        delta_label(revenue_change)
+    )
+    k3.metric(
+        "Sản lượng",
+        f"{total_qty:,.2f}",
+        delta_label(quantity_change)
+    )
+    k4.metric(
+        "NPP hoạt động",
+        f"{total_npp:,}",
+        delta_label(npp_change)
+    )
+    k5.metric(
+        "Tín hiệu cần xác minh",
+        f"{abnormal_signal_count:,}",
+        f"{high_risk:,} NPP mức cao/rất cao"
+    )
+
+    st.markdown("### Đánh giá các trụ cột kiểm soát")
+    quality_col, warehouse_col, business_col = st.columns(3)
+    with business_col:
+        business_status = "Cần cải thiện" if (
+            (revenue_change is not None and revenue_change <= -30)
+            or (quantity_change is not None and quantity_change <= -30)
+            or inactive_npp_count > 0
+        ) else "Ổn định theo chỉ tiêu đang theo dõi"
+        business_css = "risk-watch" if business_status.startswith("Cần") else "risk-low"
+        st.markdown(
+            f'<div class="risk-card {business_css}"><b>HIỆU QUẢ KINH DOANH</b><br>'
+            f'<b>{business_status}</b><br>'
+            f'Doanh thu: {revenue_change:+.1f}% so với kỳ trước' if revenue_change is not None
+            else f'<div class="risk-card risk-unknown"><b>HIỆU QUẢ KINH DOANH</b><br>Chưa đủ kỳ trước để so sánh'
+            , unsafe_allow_html=True
+        )
+        st.caption(f"NPP ngừng giao dịch: {inactive_npp_count}; NPP mới phát sinh: {new_npp_count}.")
+    with warehouse_col:
+        if warehouse_bad_events:
+            status_text, css_class = "Cần xác minh", "risk-orange"
+        elif warehouse_comparable and warehouse_fit_pct >= 95:
+            status_text, css_class = "Đạt tốt theo ma trận", "risk-low"
+        elif warehouse_comparable:
+            status_text, css_class = "Cần theo dõi", "risk-watch"
+        else:
+            status_text, css_class = "Chưa đủ dữ liệu", "risk-unknown"
+        st.markdown(
+            f'<div class="risk-card {css_class}"><b>KHO LẤY HÀNG</b><br>'
+            f'<b>{status_text}</b><br>'
+            f'{warehouse_fit_pct:.1f}% phù hợp trực tiếp; {warehouse_bad_events} sự kiện ngoài danh sách'
+            if warehouse_comparable else
+            f'<div class="risk-card risk-unknown"><b>KHO LẤY HÀNG</b><br>Chưa đủ giao dịch để đánh giá'
+            , unsafe_allow_html=True
+        )
+        st.caption(
+            f"Phù hợp trực tiếp: {good_warehouse_events}; dự phòng cần xác minh: "
+            f"{provisional_warehouse_events}; thiếu dữ liệu/đặc biệt: "
+            f"{warehouse_unknown_events + warehouse_special_events}."
+        )
+    with quality_col:
+        if data_quality_pct < 90:
+            quality_status, quality_css = "Cần cải thiện", "risk-critical"
+        elif unknown_count > 0:
+            quality_status, quality_css = "Cần theo dõi", "risk-watch"
+        else:
+            quality_status, quality_css = "Đủ dữ liệu theo các trường đã kiểm tra", "risk-low"
+        st.markdown(
+            f'<div class="risk-card {quality_css}"><b>CHẤT LƯỢNG DỮ LIỆU</b><br>'
+            f'<b>{quality_status}</b><br>{data_quality_pct:.1f}% dòng không bị gắn cờ thiếu thông tin'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+        st.caption(f"Dòng cần bổ sung/không nhận diện: {unknown_count}.")
+
+    st.markdown("### Nhận xét tự động")
+    if not auto_comments:
+        st.info("Chưa phát sinh nhận xét tự động; cần kiểm tra các báo cáo chi tiết.")
+    else:
+        for severity, title, message in auto_comments:
+            color = {
+                "success": "#16834a",
+                "info": "#2563a6",
+                "warning": "#b77900",
+                "danger": "#c33b35",
+            }.get(severity, "#607080")
+            st.markdown(
+                f'<div style="border-left:4px solid {color};background:#f4f6f8;'
+                f'padding:10px 13px;border-radius:7px;margin:6px 0;color:#263241;">'
+                f'<b>{title}:</b> {message}</div>',
+                unsafe_allow_html=True
+            )
+
+    st.markdown("### 1.1 Kết quả kiểm soát kho theo ngày")
+    st.caption("Cột: số sự kiện kho phù hợp, kho cần xác minh, chưa đủ căn cứ. Đường: tỷ lệ phù hợp trực tiếp.")
+    if daily_summary.empty or (
+        (daily_summary[["Kho_phu_hop", "Kho_can_xac_minh", "Kho_chua_ket_luan"]].sum().sum()) == 0
+    ):
+        st.info("Không có giao dịch xe khách hàng đủ dữ liệu để lập biểu đồ kho theo ngày.")
+    else:
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        x_values = daily_summary["_ngay_only"].astype(str)
+        fig.add_trace(
+            go.Bar(x=x_values, y=daily_summary["Kho_phu_hop"], name="Kho phù hợp"),
+            secondary_y=False
+        )
+        fig.add_trace(
+            go.Bar(x=x_values, y=daily_summary["Kho_can_xac_minh"], name="Kho cần xác minh"),
+            secondary_y=False
+        )
+        fig.add_trace(
+            go.Bar(x=x_values, y=daily_summary["Kho_chua_ket_luan"], name="Chưa đủ căn cứ"),
+            secondary_y=False
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=x_values,
+                y=daily_summary["Ty_le_kho_phu_hop_pct"],
+                name="% kho phù hợp trực tiếp",
+                mode="lines+markers",
+                line=dict(width=2),
+            ),
+            secondary_y=True
+        )
+        fig.update_layout(
+            barmode="stack",
+            height=370,
+            margin=dict(l=10, r=20, t=35, b=10),
+            legend=dict(orientation="h", y=1.12),
+            xaxis_title="Ngày",
+            yaxis_title="Số chứng từ/sự kiện",
+            yaxis2_title="% phù hợp",
+            hovermode="x unified",
+        )
+        fig.update_yaxes(rangemode="tozero", secondary_y=False)
+        fig.update_yaxes(range=[0, 100], secondary_y=True)
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("### 1.2 Bảng tổng hợp theo ngày")
+    if daily_summary.empty:
+        st.info("Không có dữ liệu theo ngày.")
+    else:
+        daily_view = daily_summary.rename(columns={
+            "_ngay_only": "Ngày",
+            "Doanh_thu": "Doanh thu",
+            "San_luong": "Sản lượng",
+            "So_NPP": "Số NPP",
+            "So_chung_tu": "Số chứng từ",
+            "Kho_phu_hop": "Kho phù hợp",
+            "Kho_can_xac_minh": "Kho cần xác minh",
+            "Kho_chua_ket_luan": "Chưa đủ căn cứ",
+            "Ty_le_kho_phu_hop_pct": "% kho phù hợp"
+        })
+        st.dataframe(
+            daily_view.sort_values("Ngày", ascending=False),
+            use_container_width=True,
+            hide_index=True
+        )
+        date_options = daily_summary["_ngay_only"].dropna().sort_values(ascending=False).tolist()
+        selected_day = st.selectbox(
+            "Chọn ngày để xem giao dịch chi tiết",
+            date_options,
+            format_func=lambda x: x.strftime("%d/%m/%Y"),
+            key="business_daily_drilldown"
+        )
+        day_detail = filtered[filtered["_ngay_only"] == selected_day].copy()
+        st.dataframe(
+            day_detail[[
+                "_ten_kh", "_chung_tu", "_doanh_thu", "_san_luong",
+                "_loai_xe", "_bien_so_goc", "_ma_kho", "_ten_kho",
+                "_doi_chieu_kho_tong_hop", "_dia_chi"
+            ]].rename(columns={
+                "_ten_kh": "NPP", "_chung_tu": "Chứng từ",
+                "_doanh_thu": "Doanh thu", "_san_luong": "Sản lượng",
+                "_loai_xe": "Hình thức vận chuyển", "_bien_so_goc": "Biển số/Số xe",
+                "_ma_kho": "Mã kho", "_ten_kho": "Tên kho",
+                "_doi_chieu_kho_tong_hop": "Đánh giá kho", "_dia_chi": "Địa chỉ NPP"
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
+
+    st.markdown("### NPP cần ưu tiên xác minh")
     if risk_summary.empty:
         st.info("Chưa có dữ liệu đủ điều kiện để lập bảng đánh giá NPP.")
     else:
-        levels = risk_summary["Mức độ"].value_counts().reindex(["Rất cao", "Cao", "Theo dõi", "Thấp", "Chưa đủ dữ liệu"], fill_value=0).reset_index()
-        levels.columns = ["Mức độ", "Số NPP"]
-        c1, c2 = st.columns([1, 1])
-        with c1:
-            fig = px.bar(levels, x="Mức độ", y="Số NPP", color="Mức độ", title="Phân bố mức độ rủi ro")
-            fig.update_layout(height=340, margin=dict(l=10, r=10, t=45, b=10))
-            st.plotly_chart(fig, use_container_width=True)
-        with c2:
-            if not monthly_sales.empty:
-                fig = px.line(monthly_sales, x="_thang", y="Doanh_thu", markers=True, title="Doanh thu theo tháng")
-                fig.update_layout(height=340, margin=dict(l=10, r=10, t=45, b=10))
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Chưa nhận diện được ngày để tổng hợp doanh thu theo tháng.")
-        st.markdown("### NPP cần ưu tiên xác minh")
         st.dataframe(
-            risk_summary[["NPP", "Điểm sàng lọc", "Mức độ", "Dòng kho ngoài danh sách", "Dòng xe dùng chung cùng ngày", "Dòng xe dùng chung nhiều ngày", "Mẫu hình doanh thu/sản lượng", "Liên quan dịch chuyển mặt hàng", "Số tháng biến động đột ngột", "Nhận định"]],
-            use_container_width=True, hide_index=True
+            risk_summary[[
+                "NPP", "Điểm sàng lọc", "Mức độ",
+                "Dòng kho ngoài danh sách", "Dòng xe dùng chung cùng ngày",
+                "Dòng xe dùng chung nhiều ngày",
+                "Mẫu hình doanh thu/sản lượng", "Liên quan dịch chuyển mặt hàng",
+                "Số tháng biến động đột ngột", "Nhận định"
+            ]].head(50),
+            use_container_width=True,
+            hide_index=True
         )
-    st.markdown("### Danh mục mã kho và tên kho")
-    st.dataframe(pd.DataFrame([
-        {"Mã kho": code, "Tên kho": name}
-        for code, name in WAREHOUSE_NAMES.items()
-    ]), use_container_width=True, hide_index=True)
-    st.markdown("### Quy tắc kho hợp lý theo địa chỉ")
-    st.dataframe(pd.DataFrame([
-        {"Nhóm địa chỉ": region, "Mã kho được chấp nhận": ", ".join(sorted(rule["warehouses"]))}
-        for region, rule in ADDRESS_WAREHOUSE_RULES.items()
-    ]), use_container_width=True, hide_index=True)
-    st.caption("Nếu không khớp địa chỉ cụ thể, hệ thống mới dùng cột Miền2 làm quy tắc dự phòng và đánh dấu cần xác minh địa chỉ.")
+
+    with st.expander("Danh mục kho và ma trận kho hợp lý theo địa chỉ"):
+        st.dataframe(pd.DataFrame([
+            {"Mã kho": code, "Tên kho": name}
+            for code, name in WAREHOUSE_NAMES.items()
+        ]), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame([
+            {"Nhóm địa chỉ": region, "Mã kho được chấp nhận": ", ".join(sorted(rule["warehouses"]))}
+            for region, rule in ADDRESS_WAREHOUSE_RULES.items()
+        ]), use_container_width=True, hide_index=True)
 
 with tab_sales:
     st.markdown('<div class="section-title">PHÂN TÍCH DOANH THU VÀ MẶT HÀNG</div>', unsafe_allow_html=True)
