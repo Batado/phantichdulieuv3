@@ -1,11 +1,13 @@
 import io
 import re
 import unicodedata
-from datetime import date
+from datetime import date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 
 from modules.control_center import render_control_center
@@ -707,20 +709,8 @@ if npp.empty:
 # Simple filters. Unmapped rows remain available in the separate data-quality tab.
 with st.sidebar:
     st.markdown("## 4. BỘ LỌC")
-    valid_dates = npp["_ngay"].dropna()
-    if not valid_dates.empty:
-        min_date = valid_dates.min().date()
-        max_date = valid_dates.max().date()
-        date_range = st.date_input(
-            "Khoảng ngày chứng từ",
-            value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date,
-        )
-    else:
-        date_range = None
     regions_found = sorted(x for x in npp["_vung"].unique() if x)
-    selected_regions = st.multiselect("Vùng", regions_found, default=regions_found)
+    selected_regions = st.multiselect("Vùng / nhóm địa chỉ", regions_found, default=regions_found)
     customers_found = sorted(npp["_ten_kh"].dropna().unique().tolist())
     selected_customers = st.multiselect(
         "NPP (để trống = tất cả)",
@@ -728,25 +718,106 @@ with st.sidebar:
         default=[],
     )
 
-filtered = npp.copy()
-if date_range and isinstance(date_range, (tuple, list)) and len(date_range) == 2:
-    start_date, end_date = date_range
-    filtered = filtered[
-        filtered["_ngay"].notna()
-        & (filtered["_ngay"].dt.date >= start_date)
-        & (filtered["_ngay"].dt.date <= end_date)
-    ]
+# Base population keeps all available dates for historical behavior analysis.
+history_filtered = npp.copy()
 if selected_regions:
-    filtered = filtered[filtered["_vung"].isin(selected_regions)]
+    history_filtered = history_filtered[history_filtered["_vung"].isin(selected_regions)]
 if selected_customers:
-    filtered = filtered[filtered["_ten_kh"].isin(selected_customers)]
+    history_filtered = history_filtered[history_filtered["_ten_kh"].isin(selected_customers)]
+
+valid_dates = history_filtered["_ngay"].dropna()
+if valid_dates.empty:
+    st.warning("Không có ngày chứng từ hợp lệ. Hệ thống chỉ có thể hiển thị dữ liệu chưa nhận diện.")
+    st.stop()
+
+st.markdown('<div class="section-title">KỲ BÁO CÁO</div>', unsafe_allow_html=True)
+period_col, value_col, previous_col, next_col = st.columns([1.1, 2.2, 0.7, 0.7])
+with period_col:
+    report_period_type = st.radio(
+        "Chu kỳ",
+        ["Tuần", "Tháng", "Năm"],
+        horizontal=True,
+        key="business_report_period_type",
+    )
+
+if report_period_type == "Tuần":
+    period_values = sorted(valid_dates.dt.strftime("%G-W%V").unique().tolist())
+elif report_period_type == "Tháng":
+    period_values = sorted(valid_dates.dt.strftime("%Y-%m").unique().tolist())
+else:
+    period_values = sorted(valid_dates.dt.strftime("%Y").unique().tolist())
+
+period_select_key = f"business_report_period_{report_period_type}"
+if period_select_key not in st.session_state or st.session_state[period_select_key] not in period_values:
+    st.session_state[period_select_key] = period_values[-1]
+
+current_idx = period_values.index(st.session_state[period_select_key])
+with previous_col:
+    if st.button("◀ Kỳ trước", use_container_width=True, disabled=current_idx == 0):
+        st.session_state[period_select_key] = period_values[current_idx - 1]
+with next_col:
+    if st.button("Kỳ sau ▶", use_container_width=True, disabled=current_idx >= len(period_values) - 1):
+        st.session_state[period_select_key] = period_values[current_idx + 1]
+
+with value_col:
+    selected_period_value = st.selectbox(
+        "Kỳ đang đánh giá",
+        period_values,
+        index=period_values.index(st.session_state[period_select_key]),
+        key=period_select_key,
+        format_func=lambda x: (
+            f"Tuần {x.split('-W')[-1]}/{x.split('-W')[0]}"
+            if report_period_type == "Tuần"
+            else (
+                f"Tháng {x[5:7]}/{x[:4]}"
+                if report_period_type == "Tháng"
+                else f"Năm {x}"
+            )
+        ),
+    )
+
+if report_period_type == "Tuần":
+    iso_year, iso_week = [int(x) for x in selected_period_value.split("-W")]
+    report_start = date.fromisocalendar(iso_year, iso_week, 1)
+    report_end = report_start + timedelta(days=6)
+    previous_start = report_start - timedelta(days=7)
+    previous_end = report_start - timedelta(days=1)
+elif report_period_type == "Tháng":
+    selected_month = pd.Period(selected_period_value, freq="M")
+    previous_month = selected_month - 1
+    report_start = selected_month.start_time.date()
+    report_end = selected_month.end_time.date()
+    previous_start = previous_month.start_time.date()
+    previous_end = previous_month.end_time.date()
+else:
+    selected_year = int(selected_period_value)
+    report_start = date(selected_year, 1, 1)
+    report_end = date(selected_year, 12, 31)
+    previous_start = date(selected_year - 1, 1, 1)
+    previous_end = date(selected_year - 1, 12, 31)
+
+period_scope = history_filtered.copy()
+filtered = period_scope[
+    period_scope["_ngay"].notna()
+    & (period_scope["_ngay"].dt.date >= report_start)
+    & (period_scope["_ngay"].dt.date <= report_end)
+].copy()
+comparison_filtered = period_scope[
+    period_scope["_ngay"].notna()
+    & (period_scope["_ngay"].dt.date >= previous_start)
+    & (period_scope["_ngay"].dt.date <= previous_end)
+].copy()
 
 if filtered.empty:
-    st.warning("Không có dữ liệu sau khi áp dụng bộ lọc. Hãy mở rộng khoảng ngày hoặc vùng.")
+    st.warning(
+        f"Không có giao dịch trong kỳ {report_start:%d/%m/%Y} – {report_end:%d/%m/%Y}. "
+        "Hãy chọn kỳ khác hoặc kiểm tra dữ liệu ngày chứng từ."
+    )
     st.stop()
 
 # Product Z-prefix rows are discount rows and excluded from revenue/product analytics.
 sales = filtered[~filtered["_ma_hang_z"]].copy()
+history_sales = history_filtered[~history_filtered["_ma_hang_z"]].copy()
 if mapped["item_code"] and sales.empty:
     st.warning("Sau khi loại mã hàng bắt đầu bằng Z, không còn dòng hàng để phân tích doanh thu/mặt hàng.")
 
@@ -882,7 +953,7 @@ monthly_sales = (
 # MONTHLY CUSTOMER BEHAVIOR / BUSINESS SHIFT ANALYSIS
 # ============================================================
 
-valid_sales_dates = sales["_ngay"].dropna() if "_ngay" in sales.columns else pd.Series(dtype="datetime64[ns]")
+valid_sales_dates = history_sales["_ngay"].dropna() if "_ngay" in history_sales.columns else pd.Series(dtype="datetime64[ns]")
 month_list = (
     pd.period_range(
         valid_sales_dates.min().to_period("M"),
@@ -892,7 +963,7 @@ month_list = (
     if not valid_sales_dates.empty else []
 )
 monthly_customer = (
-    sales[sales["_thang"].ne("")]
+    history_sales[history_sales["_thang"].ne("")]
     .groupby(["_customer_key", "_ten_kh", "_thang"], as_index=False)
     .agg(
         Doanh_thu=("_doanh_thu", "sum"),
@@ -1025,8 +1096,8 @@ customer_monthly_review = pd.DataFrame(period_rows)
 # between distributors. This is only a review lead, not proof of customer transfer.
 product_shift_rows = []
 if not monthly_panel.empty and prior_months and later_months and not sales.empty:
-    p = sales[
-        sales["_ma_hang"].ne("")
+    p = history_sales[
+        history_sales["_ma_hang"].ne("")
         & sales["_ma_hang_z"].eq(False)
         & sales["_vung"].ne("Chưa xác định vùng")
     ].copy()
@@ -1248,6 +1319,11 @@ for label, mask, reason in [
         part["_nhom_chua_nhan_dien"] = label
         unknown_parts.append(part)
 unrecognized = pd.concat(unknown_parts, ignore_index=True).drop_duplicates("_dong_nguon") if unknown_parts else pd.DataFrame()
+missing_date_rows = history_filtered[history_filtered["_ngay"].isna()].copy()
+if not missing_date_rows.empty:
+    missing_date_rows["_nhom_chua_nhan_dien"] = "Thiếu ngày chứng từ"
+    missing_date_rows["_ly_do_chua_nhan_dien"] = "Không có ngày hợp lệ nên không thể gán vào kỳ báo cáo."
+    unrecognized = pd.concat([unrecognized, missing_date_rows], ignore_index=True).drop_duplicates("_dong_nguon")
 
 # Risk points are transparent screening weights, not legal conclusions.
 # Count distinct business events, not item rows, to avoid inflating risk
