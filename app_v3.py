@@ -935,6 +935,11 @@ if len(month_list) >= 2:
             "Ngưỡng tăng doanh thu/sản lượng (%)",
             min_value=50, max_value=300, value=100, step=25
         )
+        shift_materiality = st.slider(
+            "Tỷ trọng tối thiểu để xem xét dịch chuyển mặt hàng (%)",
+            min_value=1, max_value=20, value=5, step=1,
+            help="Chỉ ghép cặp khi mức giảm/tăng của từng NPP có ý nghĩa so với tổng sản lượng mã hàng trong cùng vùng."
+        )
     split_index = month_list.index(split_month)
     prior_months = month_list[:split_index + 1]
     later_months = month_list[split_index + 1:]
@@ -944,6 +949,7 @@ else:
     later_months = []
     decline_threshold = 50
     growth_threshold = 100
+    shift_materiality = 5
 
 # Compare averages per calendar month, not only active months.
 # This makes the "active before, quiet later" pattern visible.
@@ -1055,9 +1061,26 @@ if not monthly_panel.empty and prior_months and later_months and not sales.empty
             (sku_pivot["Sau"] / sku_pivot["Trước"] - 1) * 100,
             np.nan
         )
+        sku_pivot["_tong_truoc_ma_vung"] = sku_pivot.groupby(
+            ["_vung", "_ma_hang"]
+        )["Trước"].transform("sum")
+        sku_pivot["_tong_sau_ma_vung"] = sku_pivot.groupby(
+            ["_vung", "_ma_hang"]
+        )["Sau"].transform("sum")
+        sku_pivot["_ty_trong_giam"] = np.where(
+            sku_pivot["_tong_truoc_ma_vung"] > 0,
+            (sku_pivot["Trước"] - sku_pivot["Sau"]) / sku_pivot["_tong_truoc_ma_vung"] * 100,
+            0
+        )
+        sku_pivot["_ty_trong_tang"] = np.where(
+            sku_pivot["_tong_sau_ma_vung"] > 0,
+            (sku_pivot["Sau"] - sku_pivot["Trước"]) / sku_pivot["_tong_sau_ma_vung"] * 100,
+            0
+        )
         decreases = sku_pivot[
             (sku_pivot["Trước"] > 0)
             & (sku_pivot["Sau"] <= sku_pivot["Trước"] * (1 - decline_threshold / 100))
+            & (sku_pivot["_ty_trong_giam"] >= shift_materiality)
         ].copy()
         increases = sku_pivot[
             (sku_pivot["Sau"] > 0)
@@ -1065,6 +1088,7 @@ if not monthly_panel.empty and prior_months and later_months and not sales.empty
                 (sku_pivot["Trước"] == 0)
                 | (sku_pivot["Sau"] >= sku_pivot["Trước"] * (1 + growth_threshold / 100))
             )
+            & (sku_pivot["_ty_trong_tang"] >= shift_materiality)
         ].copy()
 
         # Keep only the strongest 5 decreases and 5 increases per region/SKU
