@@ -534,8 +534,8 @@ def build_excel_export(sheets):
 # HEADER AND UPLOAD
 # ============================================================
 
-st.markdown('<div class="main-title">NPP BUSINESS RISK ANALYTICS</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">HOA SEN GROUP | SÀNG LỌC RỦI RO KINH DOANH NHÀ PHÂN PHỐI</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">ĐÁNH GIÁ KIỂM SOÁT KINH DOANH – NHÀ PHÂN PHỐI</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">HOA SEN GROUP | BÁO CÁO DOANH THU · KHO LẤY HÀNG · VẬN CHUYỂN · BIẾN ĐỘNG NPP</div>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("## 1. DỮ LIỆU")
@@ -794,6 +794,12 @@ else:
     report_end = date(selected_year, 12, 31)
     previous_start = date(selected_year - 1, 1, 1)
     previous_end = date(selected_year - 1, 12, 31)
+
+st.caption(
+    f"Nguồn: {uploaded.name} · Sheet: {selected_sheet} · "
+    f"Kỳ báo cáo: {report_start:%d/%m/%Y} – {report_end:%d/%m/%Y} · "
+    f"Đối chiếu kỳ trước: {previous_start:%d/%m/%Y} – {previous_end:%d/%m/%Y}"
+)
 
 period_scope = history_filtered.copy()
 filtered = period_scope[
@@ -1698,6 +1704,7 @@ abnormal_signal_count = (
     + len(vehicle_period_shared)
     + len(address_shared)
     + len(monthly_anomalies_period)
+    + len(product_shift_review)
 )
 high_risk = int(risk_summary["Mức độ"].isin(["Cao", "Rất cao"]).sum()) if not risk_summary.empty else 0
 
@@ -1713,8 +1720,15 @@ if not unrecognized.empty:
     ].copy()
 else:
     unrecognized_period = pd.DataFrame()
+undated_count = int(unrecognized_period["_ngay"].isna().sum()) if not unrecognized_period.empty else 0
+unrecognized_in_period = (
+    unrecognized_period[unrecognized_period["_ngay"].notna()].copy()
+    if not unrecognized_period.empty else pd.DataFrame()
+)
 unknown_count = len(unrecognized_period)
-data_quality_pct = max(0, (1 - unknown_count / max(len(filtered), 1))) * 100
+period_unknown_count = len(unrecognized_in_period)
+# Data-quality rate is calculated only against dated rows belonging to this report period.
+data_quality_pct = max(0, (1 - period_unknown_count / max(len(filtered), 1))) * 100
 
 # Automatic comments: every sentence ties to a measurable comparison or detected event.
 auto_comments = []
@@ -1782,7 +1796,7 @@ if unknown_count:
     auto_comments.append((
         "danger" if unknown_count / max(len(filtered), 1) >= .10 else "warning",
         "Chất lượng dữ liệu",
-        f"Có {unknown_count} dòng chưa nhận diện hoặc thiếu trường thông tin trong kỳ; cần bổ sung trước khi kết luận rủi ro."
+        f"Có {period_unknown_count} dòng trong kỳ chưa nhận diện và {undated_count} dòng không có ngày chứng từ trong toàn bộ dữ liệu; cần bổ sung trước khi kết luận."
     ))
 
 tab_overview, tab_sales, tab_monthly, tab_warehouse, tab_vehicle, tab_risk, tab_control, tab_unknown = st.tabs([
@@ -2003,6 +2017,22 @@ with tab_overview:
             }),
             use_container_width=True,
             hide_index=True
+        )
+
+        daily_export = build_excel_export({
+            "Tong_hop_theo_ngay": daily_view,
+            "Giao_dich_ngay_chon": day_detail[[
+                "_ten_kh", "_chung_tu", "_doanh_thu", "_san_luong",
+                "_loai_xe", "_bien_so_goc", "_ma_kho", "_ten_kho",
+                "_doi_chieu_kho_tong_hop", "_dia_chi"
+            ]].copy(),
+        })
+        st.download_button(
+            "XUẤT EXCEL BẢNG THEO NGÀY",
+            data=daily_export,
+            file_name=f"Bao_cao_kinh_doanh_theo_ngay_{selected_period_value}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="business_daily_export",
         )
 
     st.markdown("### NPP cần ưu tiên xác minh")
@@ -2426,7 +2456,7 @@ with tab_control:
         "address_pairs": address_pairs,
         "address_shared": address_shared,
         "customer_monthly_review": customer_monthly_review,
-        "monthly_anomalies": monthly_anomalies,
+        "monthly_anomalies": monthly_anomalies_period,
         "product_shift_review": product_shift_review,
         "monthly_sales": monthly_sales,
         "revenue": total_revenue,
