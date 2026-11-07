@@ -831,7 +831,7 @@ if mapped["item_code"] and sales.empty:
 # ============================================================
 
 current_customer_summary = (
-    filtered.groupby(["_customer_key", "_ten_kh"], dropna=False)
+    sales.groupby(["_customer_key", "_ten_kh"], dropna=False)
     .agg(
         So_dong=("_customer_key", "size"),
         So_chung_tu=("_chung_tu", "nunique"),
@@ -1621,11 +1621,12 @@ warehouse_fit_pct = (
 
 # Period day count / operating coverage.
 period_day_count = (report_end - report_start).days + 1
-active_business_days = int(filtered["_ngay_only"].nunique())
+active_business_days = int(sales["_ngay_only"].nunique())
 day_activity_pct = active_business_days / period_day_count * 100 if period_day_count else 0
 
-current_customer_keys = set(filtered["_customer_key"].dropna().astype(str))
-previous_customer_keys = set(comparison_filtered["_customer_key"].dropna().astype(str))
+comparison_sales = comparison_filtered[~comparison_filtered["_ma_hang_z"]].copy()
+current_customer_keys = set(sales["_customer_key"].dropna().astype(str))
+previous_customer_keys = set(comparison_sales["_customer_key"].dropna().astype(str))
 new_npp_count = len(current_customer_keys - previous_customer_keys)
 inactive_npp_count = len(previous_customer_keys - current_customer_keys)
 
