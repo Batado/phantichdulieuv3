@@ -202,33 +202,72 @@ def _make_findings(data: dict) -> list[dict]:
     anomalies = data.get("monthly_anomalies", pd.DataFrame())
     shifts = data.get("product_shift_review", pd.DataFrame())
 
-    def customer_rows(frame: pd.DataFrame, key: str) -> pd.DataFrame:
+    def group_by_customer(frame: pd.DataFrame | None) -> dict[str, pd.DataFrame]:
         if frame is None or frame.empty or "_customer_key" not in frame.columns:
-            return pd.DataFrame()
-        return frame[frame["_customer_key"].astype(str) == str(key)].copy()
+            return {}
+        return {
+            str(key): group
+            for key, group in frame.groupby("_customer_key", sort=False)
+        }
 
-    def plate_evidence(key: str, mode: str) -> pd.DataFrame:
-        if vehicle is None or vehicle.empty:
-            return pd.DataFrame()
-        if not {"_customer_key", "_bien_so", "_bien_so_hop_le"}.issubset(vehicle.columns):
-            return pd.DataFrame()
-        v = vehicle[
-            (vehicle["_customer_key"].astype(str) == str(key))
-            & vehicle["_bien_so_hop_le"].fillna(False)
-        ].copy()
-        if v.empty:
-            return v
-        if mode == "day" and day_shared is not None and not day_shared.empty:
-            if not {"_bien_so", "_ngay_only"}.issubset(day_shared.columns):
-                return pd.DataFrame()
-            keys = day_shared[["_bien_so", "_ngay_only"]].drop_duplicates()
-            return v.merge(keys, on=["_bien_so", "_ngay_only"], how="inner")
-        if mode == "period" and period_shared is not None and not period_shared.empty:
-            if "_bien_so" not in period_shared.columns:
-                return pd.DataFrame()
-            plates = period_shared[["_bien_so"]].drop_duplicates()
-            return v.merge(plates, on="_bien_so", how="inner")
-        return pd.DataFrame()
+    # Build lookup maps once. Avoid rescanning the entire transaction dataset
+    # for every distributor when a workbook contains many NPP.
+    warehouse_map = group_by_customer(warehouse)
+    monthly_map = group_by_customer(monthly)
+    anomaly_map = group_by_customer(anomalies)
+
+    vehicle_valid = pd.DataFrame()
+    if vehicle is not None and not vehicle.empty and {
+        "_customer_key", "_bien_so", "_bien_so_hop_le"
+    }.issubset(vehicle.columns):
+        vehicle_valid = vehicle[vehicle["_bien_so_hop_le"].fillna(False)].copy()
+
+    day_events = pd.DataFrame()
+    if (
+        not vehicle_valid.empty and day_shared is not None and not day_shared.empty
+        and {"_bien_so", "_ngay_only"}.issubset(vehicle_valid.columns)
+        and {"_bien_so", "_ngay_only"}.issubset(day_shared.columns)
+    ):
+        day_events = vehicle_valid.merge(
+            day_shared[["_bien_so", "_ngay_only"]].drop_duplicates(),
+            on=["_bien_so", "_ngay_only"], how="inner"
+        )
+    day_map = group_by_customer(day_events)
+
+    period_events = pd.DataFrame()
+    if (
+        not vehicle_valid.empty and period_shared is not None and not period_shared.empty
+        and "_bien_so" in vehicle_valid.columns and "_bien_so" in period_shared.columns
+    ):
+        period_events = vehicle_valid.merge(
+            period_shared[["_bien_so"]].drop_duplicates(),
+            on="_bien_so", how="inner"
+        )
+    period_map = group_by_customer(period_events)
+
+    address_events = pd.DataFrame()
+    if (
+        address_pairs is not None and not address_pairs.empty
+        and address_shared is not None and not address_shared.empty
+        and {"_customer_key", "_dia_chi_norm"}.issubset(address_pairs.columns)
+        and "_dia_chi_norm" in address_shared.columns
+    ):
+        address_events = address_pairs.merge(
+            address_shared[["_dia_chi_norm", "So_NPP", "Danh_sach_NPP"]].drop_duplicates(),
+            on="_dia_chi_norm", how="inner"
+        )
+    address_map = group_by_customer(address_events)
+
+    shift_map: dict[str, list[dict]] = {}
+    if (
+        shifts is not None and not shifts.empty
+        and {"_customer_key_A", "_customer_key_B"}.issubset(shifts.columns)
+    ):
+        for item in shifts.to_dict(orient="records"):
+            for key_column in ["_customer_key_A", "_customer_key_B"]:
+                key_value = _text(item.get(key_column))
+                if key_value:
+                    shift_map.setdefault(key_value, []).append(item)
 
     def add(record: dict, code: str, domain: str, level: str,
             evidence: str, recommendation: str) -> None:
@@ -253,7 +292,7 @@ def _make_findings(data: dict) -> list[dict]:
         name = _text(record.get("NPP")) or "(Chưa có tên NPP)"
         npp_level = _text(record.get("Mức độ")) or "Chưa đủ dữ liệu"
 
-        wh = customer_rows(warehouse, key)
+        wh = warehouse_map.get(str(key), pd.DataFrame())
         if _number(record.get("Dòng kho ngoài danh sách")) > 0:
             sample = []
             for _, x in wh.head(8).iterrows():
@@ -271,7 +310,7 @@ def _make_findings(data: dict) -> list[dict]:
                 "Đối chiếu địa chỉ đăng ký, mã kho 3 số đầu chứng từ, phiếu xuất kho, tồn kho, "
                 "tuyến đường, điều phối và phê duyệt ngoại lệ. Chỉ kết luận sau khi xác minh.")
 
-        day_rows = plate_evidence(key, "day")
+        day_rows = day_map.get(str(key), pd.DataFrame())
         if _number(record.get("Dòng xe dùng chung cùng ngày")) > 0:
             sample = []
             for _, x in day_rows.head(8).iterrows():
@@ -288,7 +327,7 @@ def _make_findings(data: dict) -> list[dict]:
                 "Kiểm tra giờ lấy hàng, lộ trình, chủ xe, tài xế, người nhận, số chứng từ "
                 "và khả năng xe giao/nhận nhiều điểm trong ngày.")
 
-        period_rows = plate_evidence(key, "period")
+        period_rows = period_map.get(str(key), pd.DataFrame())
         if _number(record.get("Dòng xe dùng chung nhiều ngày")) > 0:
             sample = []
             for _, x in period_rows.head(8).iterrows():
@@ -304,15 +343,7 @@ def _make_findings(data: dict) -> list[dict]:
                 "Đối chiếu lịch sử xe, hợp đồng/thỏa thuận vận chuyển, tài xế, chủ phương tiện "
                 "và mối liên hệ giữa các NPP có cùng xe.")
 
-        addr_rows = pd.DataFrame()
-        if address_pairs is not None and not address_pairs.empty and "_customer_key" in address_pairs.columns:
-            addr_rows = customer_rows(address_pairs, key)
-            if not addr_rows.empty and address_shared is not None and not address_shared.empty:
-                if "_dia_chi_norm" in addr_rows.columns and "_dia_chi_norm" in address_shared.columns:
-                    addr_rows = addr_rows.merge(
-                        address_shared[["_dia_chi_norm", "So_NPP", "Danh_sach_NPP"]],
-                        on="_dia_chi_norm", how="inner"
-                    )
+        addr_rows = address_map.get(str(key), pd.DataFrame())
         if _number(record.get("Dòng địa chỉ trùng")) > 0:
             sample = []
             for _, x in addr_rows.head(5).iterrows():
@@ -324,7 +355,7 @@ def _make_findings(data: dict) -> list[dict]:
                 "Đối chiếu hồ sơ pháp lý, địa chỉ đăng ký kinh doanh, kho/điểm bán thực tế, "
                 "người đại diện và quan hệ sở hữu/vận hành giữa các NPP.")
 
-        monthly_rows = customer_rows(monthly, key)
+        monthly_rows = monthly_map.get(str(key), pd.DataFrame())
         if _text(record.get("Biến động kinh doanh cần kiểm tra")).lower() in {"true", "1", "yes"}:
             detail = ""
             if not monthly_rows.empty:
@@ -342,12 +373,7 @@ def _make_findings(data: dict) -> list[dict]:
                 "Kiểm tra nguyên nhân thay đổi địa bàn, tồn kho, công nợ, chính sách bán hàng, "
                 "nguồn cung, thay đổi NPP phụ trách và nhu cầu tiêu thụ thực tế.")
 
-        shift_rows = pd.DataFrame()
-        if shifts is not None and not shifts.empty and {"_customer_key_A", "_customer_key_B"}.issubset(shifts.columns):
-            shift_rows = shifts[
-                (shifts["_customer_key_A"].astype(str) == str(key))
-                | (shifts["_customer_key_B"].astype(str) == str(key))
-            ].head(8)
+        shift_rows = pd.DataFrame(shift_map.get(str(key), [])[:8])
         if bool(record.get("Liên quan dịch chuyển mặt hàng", False)):
             samples = []
             for _, x in shift_rows.iterrows():
@@ -362,7 +388,7 @@ def _make_findings(data: dict) -> list[dict]:
                 "Đối chiếu địa bàn phân phối, khách hàng cuối, chính sách bán hàng, lịch sử giao dịch "
                 "và quyết định điều chuyển. Đây là tín hiệu cần xác minh, không phải bằng chứng chuyển giao.")
 
-        anomaly_rows = customer_rows(anomalies, key)
+        anomaly_rows = anomaly_map.get(str(key), pd.DataFrame())
         if _number(record.get("Số tháng biến động đột ngột")) > 0:
             samples = []
             for _, x in anomaly_rows.head(8).iterrows():
