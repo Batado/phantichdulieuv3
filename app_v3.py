@@ -159,6 +159,7 @@ ALIASES = {
     "document": ["Số chứng từ", "Số CT", "Số phiếu"],
     "address": ["Địa chỉ", "Địa chỉ khách hàng", "Địa chỉ KH", "Địa điểm"],
     "region": ["Miền2", "Miền", "Vùng miền", "Khu vực"],
+    "locality": ["Khu vưc"],
     "warehouse": ["Mã kho", "Mã kho xuất", "Kho xuất", "Kho lấy hàng"],
     "warehouse_code_check": ["Mã kho2"],
     "warehouse_name": ["Kho lấy hàng"],
@@ -724,7 +725,10 @@ def prepare_transaction_frame(source: pd.DataFrame, mapping_items: tuple, wareho
     pickup_input["Số lượng"] = frame["_san_luong"]
     pickup_input["Khối lượng"] = frame["_khoi_luong"]
 
-    pickup_detail, _, _ = analyze_customer_pickups(pickup_input, warehouse_matrix)
+    pickup_scoped, _ = apply_business_scope_filter(
+        pickup_input, document_col="Số chứng từ", order_type_col="Loại đơn hàng"
+    )
+    pickup_detail, _, _ = analyze_customer_pickups(pickup_scoped, warehouse_matrix)
     frame["_event_key"] = frame["_customer_key"] + "|" + frame["_chung_tu"]
     blank_document = frame["_chung_tu"].eq("")
     frame.loc[blank_document, "_event_key"] = "ROW|" + frame.index[blank_document].astype(str)
