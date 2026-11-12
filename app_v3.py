@@ -338,28 +338,52 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+def _sync_business_navigation(widget_key):
+    st.session_state["business_analysis_nav"] = st.session_state.get(widget_key, "Tổng quan")
+
+
 with st.sidebar:
     st.markdown("## ◈ BUSINESS CONTROL")
     st.caption("WORKSPACE / PHÂN TÍCH KINH DOANH")
-    st.markdown("#### ĐIỀU HƯỚNG")
-    menu_labels = {
-        "Tổng quan": "⌂  Tổng quan",
+    st.markdown("#### TỔNG QUAN")
+    if st.button("⌂  Tổng quan", key="nav_overview_button", use_container_width=True):
+        st.session_state["business_analysis_nav"] = "Tổng quan"
+
+    st.markdown("#### PHÂN TÍCH")
+    analysis_labels = {
         "Doanh thu & mặt hàng": "▥  Doanh thu & mặt hàng",
         "Biến động theo tháng": "↗  Biến động theo tháng",
         "Đối chiếu kho": "▦  Đối chiếu kho",
         "Xe khách hàng": "▰  Xe khách hàng",
+        "Phân tích kho lấy hàng": "▣  Kho lấy hàng",
+    }
+    st.radio(
+        "PHÂN TÍCH NGHIỆP VỤ",
+        list(analysis_labels),
+        format_func=lambda value: analysis_labels[value],
+        key="business_analysis_group",
+        on_change=_sync_business_navigation,
+        args=("business_analysis_group",),
+        label_visibility="collapsed",
+    )
+
+    st.markdown("#### KIỂM SOÁT")
+    control_labels = {
         "Đánh giá rủi ro": "◈  Đánh giá rủi ro",
         "Quản lý kiểm soát": "▤  Quản lý kiểm soát",
         "Chưa nhận diện": "⌕  Chưa nhận diện",
-        "Phân tích kho lấy hàng": "▣  Phân tích kho lấy hàng",
     }
-    selected_analysis = st.radio(
-        "ĐIỀU HƯỚNG",
-        list(menu_labels),
-        format_func=lambda value: menu_labels[value],
-        key="business_analysis_nav",
+    st.radio(
+        "KIỂM SOÁT",
+        list(control_labels),
+        format_func=lambda value: control_labels[value],
+        key="business_control_group",
+        on_change=_sync_business_navigation,
+        args=("business_control_group",),
         label_visibility="collapsed",
     )
+
+    selected_analysis = st.session_state.get("business_analysis_nav", "Tổng quan")
     if selected_analysis == "Phân tích kho lấy hàng":
         st.switch_page("pages/02_Phan_tich_lay_hang.py")
     st.divider()
