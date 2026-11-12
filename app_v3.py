@@ -60,6 +60,9 @@ p,label {color:#aab5c3;}
 [data-testid="stDownloadButton"] button {background:#19b9b0;color:#061014;border:0;}
 hr {border-color:#293441!important;}
 .stRadio label {color:#cbd5e1!important;}
+[data-testid="stSidebar"] [data-testid="stButton"] button {justify-content:flex-start!important;text-align:left!important;background:transparent!important;border:1px solid transparent!important;color:#aeb9c6!important;font-size:12px!important;padding:8px 11px!important;}
+[data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"] {background:#173c42!important;border-color:#28676a!important;color:#eafffd!important;}
+[data-testid="stSidebar"] [data-testid="stButton"] button:hover {background:#1a222c!important;border-color:#334253!important;color:#ffffff!important;}
 .stMultiSelect [data-baseweb="tag"] {background:#16464a!important;}
 .risk-card {background:#171d26;border:1px solid #2a3543;border-radius:12px;padding:14px 15px;min-height:104px;color:#dbe5ef;line-height:1.55;}
 .risk-card b {color:#f4f7fb;letter-spacing:.025em;}
