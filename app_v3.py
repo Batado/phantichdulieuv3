@@ -16,6 +16,7 @@ px.defaults.template = "plotly_dark"
 px.defaults.color_discrete_sequence = ["#45d6cf", "#4d8dff", "#9b8cff", "#f2b866", "#f2788a"]
 
 from modules.control_center import render_control_center
+from modules.pickup_analysis import analyze_customer_pickups
 from modules.scope_filter import apply_business_scope_filter
 
 
@@ -68,7 +69,7 @@ WAREHOUSE_NAMES = {
     "053": "Nhựa Phú Mỹ", "054": "Nhựa Phú Mỹ", "055": "Nhựa Phú Mỹ",
     "251": "Nhựa BĐ", "252": "TK Đaklak", "253": "Nhựa BĐ", "254": "Nhựa BĐ",
     "261": "Nhựa HN", "262": "Nhựa HN", "263": "TK ĐN", "264": "TK ĐN",
-    "281": "TK CT", "282": "Kho hàng gửi tại HS Home của HSN Phú Mỹ",
+    "281": "TK CT", "282": "Mã kho HS Home",
     "283": "TK CT", "284": "TK PT", "285": "TK PT", "291": "TK YB",
     "292": "Kho hàng gửi tại HS Home của HSN Phú Mỹ",
     "301": "TK Nam Cấm", "302": "TK Nam Cấm",
@@ -159,6 +160,8 @@ ALIASES = {
     "address": ["Địa chỉ", "Địa chỉ khách hàng", "Địa chỉ KH", "Địa điểm"],
     "region": ["Miền2", "Miền", "Vùng miền", "Khu vực"],
     "warehouse": ["Mã kho", "Mã kho xuất", "Kho xuất", "Kho lấy hàng"],
+    "warehouse_code_check": ["Mã kho2"],
+    "warehouse_name": ["Kho lấy hàng"],
     "warehouse_region_file": ["Kho lấy hàng vùng miền", "Kho lấy hàng theo vùng miền", "Kho vùng miền", "Danh sách kho hợp lý theo vùng"],
     "warehouse_note_file": [
         "Ghi chú hợp lý hoặc không hợp lý", "Ghi chú hợp lý/không hợp lý",
@@ -304,6 +307,17 @@ def inspect_workbook(file_bytes):
             logs.append(f"{sheet}: không đọc được ({exc})")
     options.sort(key=lambda x: (x["score"], x["rows"]), reverse=True)
     return options, logs
+
+
+@st.cache_data(show_spinner=False, max_entries=4)
+def load_warehouse_reference(file_bytes):
+    """Load the workbook's own warehouse matrix; never substitute hard-coded region rules."""
+    xls = pd.ExcelFile(io.BytesIO(file_bytes), engine="openpyxl")
+    matrix_sheet = next((s for s in xls.sheet_names if norm(s) == "kho lay hang"), None)
+    if matrix_sheet is None:
+        return pd.DataFrame(), ""
+    reference = pd.read_excel(io.BytesIO(file_bytes), sheet_name=matrix_sheet, engine="openpyxl")
+    return reference, matrix_sheet
 
 
 @st.cache_data(show_spinner=False, max_entries=4)
@@ -481,7 +495,7 @@ def warehouse_check(region, warehouse):
     if not allowed:
         return "Chưa đủ dữ liệu địa chỉ/vùng"
     if warehouse in allowed:
-        return WAREHOUSE_STATUS_FALLBACK if basis == "Miền2 dự phòng" else "Phù hợp địa chỉ/khu vực"
+        return WAREHOUSE_STATUS_FALLBACK if basis == "Miền2 dự phòng" else "Phù hợp danh mục kho"
     return WAREHOUSE_STATUS_OUTSIDE
 
 
@@ -615,6 +629,10 @@ if raw.empty:
     st.warning("Sheet không có dữ liệu.")
     st.stop()
 
+warehouse_matrix_reference, warehouse_matrix_sheet = load_warehouse_reference(file_bytes)
+if warehouse_matrix_reference.empty:
+    st.warning("Workbook không có sheet 'kho lấy hàng'. Phần đối chiếu kho sẽ chuyển sang trạng thái chưa đủ dữ liệu, không tự suy đoán danh sách kho.")
+
 # Auto-map fields; explicit aliases match actual workbook names.
 mapped = {key: find_column(raw.columns, aliases) for key, aliases in ALIASES.items()}
 
@@ -646,7 +664,7 @@ if not mapped["customer"]:
 # ============================================================
 
 @st.cache_data(show_spinner="Đang chuẩn hóa dữ liệu giao dịch...")
-def prepare_transaction_frame(source: pd.DataFrame, mapping_items: tuple) -> pd.DataFrame:
+def prepare_transaction_frame(source: pd.DataFrame, mapping_items: tuple, warehouse_matrix: pd.DataFrame) -> pd.DataFrame:
     """Cache expensive row normalization so Streamlit widget reruns stay responsive."""
     local_mapping = dict(mapping_items)
     frame = source.copy()
@@ -680,45 +698,55 @@ def prepare_transaction_frame(source: pd.DataFrame, mapping_items: tuple) -> pd.
     frame["_khoi_luong"] = get_col("weight").map(parse_number)
     frame["_ma_hang"] = get_col("item_code").map(clean)
     frame["_ten_hang"] = get_col("item_name").map(clean)
-    frame["_vung"] = [
-        identify_region(region, address)
-        for region, address in zip(frame["_mien_goc"], frame["_dia_chi"])
-    ]
-    frame["_doi_chieu_kho"] = [
-        warehouse_check(region, code)
-        for region, code in zip(frame["_vung"], frame["_ma_kho"])
-    ]
-    frame["_doi_chieu_kho_tong_hop"] = [
-        combine_warehouse_review(base, code, file_region, file_note)
-        for base, code, file_region, file_note in zip(
-            frame["_doi_chieu_kho"], frame["_ma_kho"],
-            frame["_kho_vung_file"], frame["_ghi_chu_kho_file"]
-        )
-    ]
-    allowed_by_region = {
-        region: ", ".join(sorted(allowed_warehouses_for_region(region)[0]))
-        for region in frame["_vung"].dropna().unique()
-    }
-    frame["_kho_hop_ly_theo_dia_chi"] = frame["_vung"].map(allowed_by_region).fillna("")
-    frame["_ly_do_doi_chieu_kho"] = [
-        (
-            f"Địa chỉ thuộc {region}; kho thực tế {code} - {warehouse_name(code)}; "
-            f"kho chấp nhận: {', '.join(sorted(allowed_warehouses_for_region(region)[0]))}."
-            if allowed_warehouses_for_region(region)[0] and code in WAREHOUSE_NAMES
-            else (
-                f"Chưa xác định được khu vực từ địa chỉ/miền; mã kho chứng từ: {code or 'trống'}."
-                if not allowed_warehouses_for_region(region)[0]
-                else f"Không trích xuất được mã kho hợp lệ từ số chứng từ: {code or 'trống'}."
-            )
-        )
-        for region, code in zip(frame["_vung"], frame["_ma_kho"])
-    ]
+    # Miền2 is retained as the company's business-region classification.
+    # Warehouse fit itself is checked only against the workbook's province/warehouse matrix.
+    frame["_vung"] = frame["_mien_goc"].replace("", "Chưa xác định vùng")
     frame["_customer_key"] = np.where(
         frame["_ma_kh"].ne(""),
         frame["_ma_kh"].str.upper(),
         frame["_ten_kh"].map(norm),
     )
     frame["_customer_key"] = pd.Series(frame["_customer_key"], index=frame.index).fillna("")
+
+    pickup_input = pd.DataFrame(index=frame.index)
+    pickup_input["Địa chỉ"] = frame["_dia_chi"]
+    pickup_input["Mã kho2"] = get_col("warehouse_code_check").map(clean)
+    pickup_input["Số chứng từ"] = frame["_chung_tu"]
+    pickup_input["Shipping method"] = frame["_hinh_thuc_goc"]
+    pickup_input["Kho lấy hàng"] = get_col("warehouse_name").map(clean)
+    pickup_input["Số xe"] = frame["_bien_so_goc"]
+    pickup_input["Mã khách hàng"] = frame["_ma_kh"].str.upper()
+    pickup_input["Tên khách hàng"] = frame["_ten_kh"]
+    pickup_input["Ngày chứng từ"] = frame["_ngay"]
+    pickup_input["Loại đơn hàng"] = frame["_loai_don_hang"]
+    pickup_input["Ghi chú2"] = frame["_ghi_chu_kho_file"]
+    pickup_input["Thành tiền bán"] = frame["_doanh_thu"]
+    pickup_input["Số lượng"] = frame["_san_luong"]
+    pickup_input["Khối lượng"] = frame["_khoi_luong"]
+
+    pickup_detail, _, _ = analyze_customer_pickups(pickup_input, warehouse_matrix)
+    frame["_event_key"] = frame["_customer_key"] + "|" + frame["_chung_tu"]
+    blank_document = frame["_chung_tu"].eq("")
+    frame.loc[blank_document, "_event_key"] = "ROW|" + frame.index[blank_document].astype(str)
+    status_map = pickup_detail.set_index("_event_key")["Kết quả đối chiếu"] if not pickup_detail.empty else pd.Series(dtype=str)
+    allowed_map = pickup_detail.set_index("_event_key")["Mã kho được phép"] if not pickup_detail.empty else pd.Series(dtype=str)
+    province_map = pickup_detail.set_index("_event_key")["Tỉnh/thành nhận diện"] if not pickup_detail.empty else pd.Series(dtype=str)
+    matrix_location_map = pickup_detail.set_index("_event_key")["Đơn vị khớp ma trận"] if not pickup_detail.empty else pd.Series(dtype=str)
+    frame["_doi_chieu_kho_tong_hop"] = "Không áp dụng - xe nhà máy/thuê ngoài hoặc chưa xác định"
+    customer_vehicle_mask = frame["_loai_xe"].eq("Xe khách hàng")
+    frame.loc[customer_vehicle_mask, "_doi_chieu_kho_tong_hop"] = (
+        frame.loc[customer_vehicle_mask, "_event_key"].map(status_map).fillna("Chưa đủ dữ liệu đối chiếu ma trận")
+    )
+    frame["_doi_chieu_kho"] = frame["_doi_chieu_kho_tong_hop"]
+    frame["_kho_hop_ly_theo_dia_chi"] = frame["_event_key"].map(allowed_map).fillna("")
+    frame["_tinh_thanh_nhan_dien"] = frame["_event_key"].map(province_map).fillna("")
+    frame["_don_vi_khop_ma_tran"] = frame["_event_key"].map(matrix_location_map).fillna("")
+    frame["_ly_do_doi_chieu_kho"] = (
+        frame["_doi_chieu_kho_tong_hop"].astype(str)
+        + " | Tỉnh/thành: " + frame["_tinh_thanh_nhan_dien"].astype(str)
+        + " | Địa bàn ma trận: " + frame["_don_vi_khop_ma_tran"].astype(str)
+        + " | Mã kho được phép: " + frame["_kho_hop_ly_theo_dia_chi"].astype(str)
+    )
     frame["_ngay_only"] = frame["_ngay"].dt.date
     frame["_thang"] = frame["_ngay"].dt.to_period("M").astype(str).replace("NaT", "")
     frame["_ma_hang_z"] = frame["_ma_hang"].str.upper().str.startswith("Z", na=False)
@@ -729,7 +757,7 @@ if not mapped.get("order_type") or not mapped.get("document"):
     st.error("Không nhận diện được cột 'Loại đơn hàng' hoặc 'Số chứng từ'. Hai cột này bắt buộc để lọc đúng phạm vi kiểm soát.")
     st.stop()
 
-df = prepare_transaction_frame(raw, tuple(mapped.items()))
+df = prepare_transaction_frame(raw, tuple(mapped.items()), warehouse_matrix_reference)
 df, scope_excluded = apply_business_scope_filter(
     df,
     document_col=mapped["document"],
@@ -951,26 +979,19 @@ history_customer_vehicle = history_filtered[
     history_filtered["_loai_xe"] == "Xe khách hàng"
 ].copy()
 warehouse_evidence_statuses = {
-    WAREHOUSE_STATUS_OUTSIDE,
-    "Không khớp danh sách kho vùng miền trong file",
-    "Theo ghi chú file: không hợp lý - cần xác minh",
-    "Mâu thuẫn: thuật toán phù hợp nhưng file ghi không hợp lý",
-    "Mâu thuẫn: file ghi hợp lý nhưng kho ngoài vùng địa chỉ",
-    "Không khớp danh sách kho vùng miền trong file",
+    status for status in customer_vehicle["_doi_chieu_kho_tong_hop"].dropna().astype(str).unique()
+    if status.startswith(("Ngoài danh mục", "Mâu thuẫn"))
 }
 warehouse_evidence = customer_vehicle[
     customer_vehicle["_doi_chieu_kho_tong_hop"].isin(warehouse_evidence_statuses)
 ].copy()
 warehouse_special = customer_vehicle[
-    customer_vehicle["_doi_chieu_kho_tong_hop"] == WAREHOUSE_STATUS_SPECIAL
+    customer_vehicle["_doi_chieu_kho_tong_hop"].astype(str).str.startswith("Mã kho HS Home")
 ].copy()
 warehouse_unknown = customer_vehicle[
-    customer_vehicle["_doi_chieu_kho_tong_hop"].isin([
-        "Không trích xuất được mã kho từ số chứng từ",
-        "Mã kho chưa có trong danh mục",
-        "Chưa đủ dữ liệu địa chỉ/vùng",
-        "Chưa xác định vùng",
-    ])
+    customer_vehicle["_doi_chieu_kho_tong_hop"].astype(str).str.startswith(
+        ("Chưa", "Thiếu", "Mã kho", "Tỉnh/thành", "Cần xác minh")
+    )
 ].copy()
 warehouse_counts = (
     customer_vehicle.groupby("_doi_chieu_kho_tong_hop")
@@ -1534,14 +1555,11 @@ for _, row in customer_summary.iterrows():
         if has_customer_vehicle_data else False
     )
     comparable_warehouse_statuses = {
-        "Phù hợp địa chỉ/khu vực",
-        WAREHOUSE_STATUS_FALLBACK,
-        WAREHOUSE_STATUS_OUTSIDE,
+        "Phù hợp danh mục kho",
         "Không khớp danh sách kho vùng miền trong file",
         "Theo ghi chú file: không hợp lý - cần xác minh",
         "Mâu thuẫn: thuật toán phù hợp nhưng file ghi không hợp lý",
         "Mâu thuẫn: file ghi hợp lý nhưng kho ngoài vùng địa chỉ",
-        WAREHOUSE_STATUS_SPECIAL,
     }
     has_warehouse_evidence = (
         bool(npp_vehicle_rows["_doi_chieu_kho_tong_hop"].isin(comparable_warehouse_statuses).any())
@@ -1679,16 +1697,16 @@ if not warehouse_period.empty:
         subset=["_customer_key", "_ngay_only", "_event_key"]
     )
     good_warehouse_events = int(
-        (warehouse_period["_doi_chieu_kho_tong_hop"] == "Phù hợp địa chỉ/khu vực").sum()
+        (warehouse_period["_doi_chieu_kho_tong_hop"] == "Phù hợp danh mục kho").sum()
     )
     provisional_warehouse_events = int(
-        (warehouse_period["_doi_chieu_kho_tong_hop"] == WAREHOUSE_STATUS_FALLBACK).sum()
+        0
     )
     warehouse_bad_events = int(
         warehouse_period["_doi_chieu_kho_tong_hop"].isin(warehouse_evidence_statuses).sum()
     )
     warehouse_special_events = int(
-        (warehouse_period["_doi_chieu_kho_tong_hop"] == WAREHOUSE_STATUS_SPECIAL).sum()
+        warehouse_period["_doi_chieu_kho_tong_hop"].astype(str).str.startswith("Mã kho HS Home").sum()
     )
     warehouse_unknown_events = len(warehouse_period) - (
         good_warehouse_events + provisional_warehouse_events
@@ -1736,11 +1754,11 @@ if not warehouse_period.empty:
     daily_warehouse = (
         warehouse_period.groupby("_ngay_only")
         .agg(
-            Kho_phu_hop=("_doi_chieu_kho_tong_hop", lambda x: (x == "Phù hợp địa chỉ/khu vực").sum()),
+            Kho_phu_hop=("_doi_chieu_kho_tong_hop", lambda x: (x == "Phù hợp danh mục kho").sum()),
             Kho_can_xac_minh=("_doi_chieu_kho_tong_hop", lambda x: x.isin(warehouse_evidence_statuses).sum()),
             Kho_chua_ket_luan=("_doi_chieu_kho_tong_hop", lambda x: (
                 ~x.isin(
-                    {"Phù hợp địa chỉ/khu vực", WAREHOUSE_STATUS_FALLBACK, WAREHOUSE_STATUS_SPECIAL}
+                    {"Phù hợp danh mục kho"}
                     | warehouse_evidence_statuses
                 )
             ).sum()),
@@ -2226,10 +2244,10 @@ if selected_analysis == "Tổng quan":
             {"Mã kho": code, "Tên kho": name}
             for code, name in WAREHOUSE_NAMES.items()
         ]), use_container_width=True, hide_index=True)
-        st.dataframe(pd.DataFrame([
-            {"Nhóm địa chỉ": region, "Mã kho được chấp nhận": ", ".join(sorted(rule["warehouses"]))}
-            for region, rule in ADDRESS_WAREHOUSE_RULES.items()
-        ]), use_container_width=True, hide_index=True)
+        if not warehouse_matrix_reference.empty:
+            st.dataframe(warehouse_matrix_reference, use_container_width=True, hide_index=True)
+        else:
+            st.warning("Không có sheet ma trận kho trong workbook; không thể xác nhận kho hợp lý theo địa chỉ.")
 
 elif selected_analysis == "Doanh thu & mặt hàng":
     st.markdown('<div class="section-title">PHÂN TÍCH DOANH THU VÀ MẶT HÀNG</div>', unsafe_allow_html=True)
@@ -2417,8 +2435,8 @@ elif selected_analysis == "Đối chiếu kho":
     st.caption("Chỉ xét các dòng có hình thức vận chuyển là Xe khách hàng. Xe nhà máy và xe nhà máy thuê ngoài được loại khỏi phần này.")
     a, b, c = st.columns(3)
     a.metric("Dòng xe khách hàng", f"{len(customer_vehicle):,}")
-    b.metric("Ngoài vùng ưu tiên", f"{len(warehouse_evidence):,}")
-    c.metric("Kho HS Home / thiếu dữ liệu", f"{len(warehouse_special) + len(warehouse_unknown):,}")
+    b.metric("Ngoài danh mục / mâu thuẫn", f"{len(warehouse_evidence):,}")
+    c.metric("Kho đặc biệt / chưa đủ dữ liệu", f"{len(warehouse_special) + len(warehouse_unknown):,}")
     if not warehouse_counts.empty:
         st.dataframe(warehouse_counts, use_container_width=True, hide_index=True)
     st.markdown("### :material/wrong_location: Giao dịch kho ngoài vùng ưu tiên")
