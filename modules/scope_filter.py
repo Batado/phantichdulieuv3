@@ -22,7 +22,7 @@ def normalize_text(value) -> str:
     text = unicodedata.normalize("NFKD", str(value).strip().lower())
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
     text = text.replace("đ", "d")
-    return re.sub(r"\\s+", " ", re.sub(r"[^a-z0-9]+", " ", text)).strip()
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", text)).strip()
 
 
 def strip_erp_prefix(value: str) -> str:
