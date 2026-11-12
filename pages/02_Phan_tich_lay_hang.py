@@ -26,7 +26,7 @@ st.set_page_config(
     page_title="Phân tích kho lấy hàng | Business Control",
     page_icon="📦",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 st.markdown("""
@@ -79,7 +79,7 @@ READ_COLUMNS = {norm(x) for x in [
     "Tên khách hàng", "Loại khách hàng", "Địa chỉ", "Mã kho2", "Mã kho",
     "Kho lấy hàng", "Shipping method", "Hình thức vận chuyển",
     "Số xe", "Biển số xe", "Ghi chú2", "Thành tiền bán", "Số lượng",
-    "Khối lượng", "Mã hàng", "Tên hàng", "Miền2", "NPP/Dự án",
+    "Khối lượng", "Mã hàng", "Tên hàng", "Miền2", "Khu vưc", "NPP/Dự án",
 ]}
 
 
@@ -297,7 +297,7 @@ def build_ai_findings(result: dict) -> pd.DataFrame:
     incomplete = total - fit - exception
     compared = fit + exception
     fit_rate = fit / compared * 100 if compared else np.nan
-    affected_customers = int(customers["Số_ngoài_danh_mục"].gt(0).sum()) if not customers.empty else 0
+    affected_customers = int((customers["Số_ngoài_danh_mục"].gt(0) | customers["Số_chưa_đủ_dữ_liệu"].gt(0)).sum()) if not customers.empty else 0
     findings.append({
         "Biểu tượng": "🏭",
         "Đầu mục đánh giá": "03 · Tính hợp lý kho lấy hàng",
@@ -375,9 +375,33 @@ def build_ai_findings(result: dict) -> pd.DataFrame:
         "Đề xuất kiểm soát": "Yêu cầu đơn vị kinh doanh hoàn thiện trường dữ liệu bắt buộc; theo dõi tỷ lệ thiếu theo NPP và người lập chứng từ.",
     })
 
+    region_values = detail.get("Miền2 theo workbook", pd.Series(dtype=str)).fillna("").astype(str).str.strip()
+    locality_checks = detail.get("Đối chiếu Khu vực với địa chỉ", pd.Series(dtype=str)).fillna("").astype(str)
+    missing_region = int(region_values.eq("").sum())
+    locality_mismatch = int(locality_checks.str.startswith("Không khớp").sum())
+    locality_missing = int(locality_checks.eq("Thiếu Khu vực").sum())
+    province_region_pairs = detail.loc[
+        detail["Tỉnh/thành nhận diện"].fillna("").astype(str).str.strip().ne("")
+        & region_values.ne("")
+    ].groupby("Tỉnh/thành nhận diện")["Miền2 theo workbook"].nunique()
+    multiple_business_regions = int(province_region_pairs.gt(1).sum())
+    findings.append({
+        "Biểu tượng": "🧭",
+        "Đầu mục đánh giá": "07 · Đối chiếu vùng miền và địa bàn",
+        "Mức ưu tiên": "Cao" if locality_mismatch else ("Theo dõi" if missing_region or locality_missing or multiple_business_regions else "Thông tin"),
+        "Kết quả": f"{missing_region:,} thiếu Miền2 · {locality_mismatch:,} Khu vực không khớp địa chỉ · {multiple_business_regions:,} tỉnh/thành có nhiều nhãn Miền2",
+        "Nhận định tự động": (
+            "Miền2 được giữ theo phân vùng kinh doanh của workbook, không tự đổi sang phân vùng địa lý do hệ thống suy đoán. "
+            "Cột Khu vực được kiểm tra xem có xuất hiện trong các thành phần địa chỉ hay không. "
+            f"Còn {locality_missing:,} chứng từ thiếu Khu vực."
+        ),
+        "Căn cứ": "Địa chỉ khách hàng, Khu vưc và Miền2 trong OM-055; tỉnh/thành được trích từ thành phần hành chính ghi rõ trong địa chỉ.",
+        "Đề xuất kiểm soát": "Xác nhận các tỉnh/thành có nhiều nhãn Miền2 theo sơ đồ phân vùng kinh doanh được phê duyệt; sửa các dòng Khu vực không khớp địa chỉ trước khi kết luận kho.",
+    })
+
     findings.append({
         "Biểu tượng": "📈",
-        "Đầu mục đánh giá": "07 · Doanh thu và sản lượng liên quan",
+        "Đầu mục đánh giá": "08 · Doanh thu và sản lượng liên quan",
         "Mức ưu tiên": "Thông tin",
         "Kết quả": (
             f"Doanh thu {detail['Doanh thu'].sum(min_count=1):,.0f} · "
@@ -491,7 +515,7 @@ if pickup_section == "AI đánh giá":
     if not detail.empty:
         chart = detail["Kết quả đối chiếu"].value_counts().rename_axis("Kết quả").reset_index(name="Số chứng từ")
         fig = px.bar(chart, x="Kết quả", y="Số chứng từ", color="Kết quả", text_auto=True, title="Phân bố kết quả đối chiếu kho")
-        fig.update_layout(showlegend=False, margin=dict(l=10, r=10, t=55, b=10), plot_bgcolor="white", paper_bgcolor="white")
+        fig.update_layout(showlegend=False, margin=dict(l=10, r=10, t=55, b=10), plot_bgcolor="#0b0d11", paper_bgcolor="#0b0d11", font_color="#dbe5ef")
         st.plotly_chart(fig, use_container_width=True)
 
 elif pickup_section == "NPP cần xác minh":
