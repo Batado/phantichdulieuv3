@@ -46,6 +46,10 @@ def parse_code_sequence(value: Any) -> set[str]:
     text = clean(value)
     if not text:
         return set()
+    if isinstance(value, (int, float)) and not pd.isna(value):
+        text = str(int(value))
+    elif re.fullmatch(r"\d+\.0+", text):
+        text = str(int(float(text)))
     digits = re.sub(r"\D", "", text)
     if not digits:
         return set()
