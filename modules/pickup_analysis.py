@@ -137,6 +137,14 @@ def analyze_customer_pickups(
             status = "Phù hợp danh mục kho"
         else:
             status = "Ngoài danh mục kho hợp lý"
+
+        original_note = clean(row.get("Ghi chú2"))
+        note_norm = norm(original_note)
+        if status == "Ngoài danh mục kho hợp lý" and "hop ly" in note_norm and "khong hop ly" not in note_norm:
+            status = "Mâu thuẫn: ma trận ngoài danh mục nhưng Ghi chú2 ghi Hợp lý"
+        elif status == "Phù hợp danh mục kho" and "khong hop ly" in note_norm:
+            status = "Mâu thuẫn: ma trận phù hợp nhưng Ghi chú2 ghi Không hợp lý"
+
         rows.append({
             "_source_index": index,
             "Ngày chứng từ": row.get("Ngày chứng từ"),
@@ -151,7 +159,7 @@ def analyze_customer_pickups(
             "Tên kho thực tế": clean(row.get(warehouse_name_col)),
             "Mã kho được phép": ", ".join(sorted(allowed)),
             "Kết quả đối chiếu": status,
-            "Ghi chú gốc": clean(row.get("Ghi chú2")),
+            "Ghi chú gốc": original_note,
         })
     detail = pd.DataFrame(rows)
     if detail.empty:
@@ -162,7 +170,11 @@ def analyze_customer_pickups(
         .agg(
             Số_chứng_từ=("Số chứng từ", "nunique"),
             Số_phù_hợp=("Kết quả đối chiếu", lambda s: (s == "Phù hợp danh mục kho").sum()),
-            Số_ngoài_danh_mục=("Kết quả đối chiếu", lambda s: (s == "Ngoài danh mục kho hợp lý").sum()),
+            Số_ngoài_danh_mục=("Kết quả đối chiếu", lambda s: s.isin([
+                "Ngoài danh mục kho hợp lý",
+                "Mâu thuẫn: ma trận ngoài danh mục nhưng Ghi chú2 ghi Hợp lý",
+                "Mâu thuẫn: ma trận phù hợp nhưng Ghi chú2 ghi Không hợp lý",
+            ]).sum()),
             Số_chưa_đủ_dữ_liệu=("Kết quả đối chiếu", lambda s: s.str.startswith(("Chưa", "Thiếu", "Mã kho")).sum()),
             Số_biển_số=("Biển số xe", lambda s: s.replace("", pd.NA).nunique()),
         )
