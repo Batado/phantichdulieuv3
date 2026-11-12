@@ -44,7 +44,13 @@ section[data-testid="stSidebar"] {background:#f1f5f9;border-right:1px solid #dbe
 .risk-high {background:#fff3e8;color:#994d00;border-left:4px solid #f97316;}
 .risk-critical {background:#fff0f0;color:#a12a2a;border-left:4px solid #d92d20;}
 .risk-unknown {background:#f1f5f9;color:#475569;border-left:4px solid #94a3b8;}
-div[data-testid="stMetric"] {background:#fff;padding:12px;border-radius:9px;border:1px solid #dbe3ed;}
+div[data-testid="stMetric"] {background:#fff;padding:10px 12px;border-radius:10px;border:1px solid #dbe3ed;box-shadow:0 1px 2px rgba(15,23,42,.035);}
+.stTabs [data-baseweb="tab-list"] {gap:6px;border-bottom:1px solid #dbe3ed;}
+.stTabs [data-baseweb="tab"] {height:42px;padding:0 13px;border-radius:8px 8px 0 0;font-weight:600;}
+.stTabs [aria-selected="true"] {background:#eaf2fb;color:#174b78;}
+div[data-testid="stDataFrame"] {border:1px solid #e2e8f0;border-radius:9px;overflow:hidden;}
+div[data-testid="stExpander"] {border:1px solid #e2e8f0;border-radius:9px;}
+.risk-orange {background:#fff3e8;color:#994d00;border-left:4px solid #f97316;}
 </style>
 """, unsafe_allow_html=True)
 
