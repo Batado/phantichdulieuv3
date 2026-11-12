@@ -25,7 +25,7 @@ st.set_page_config(
     page_title="Business Control Intelligence",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 st.markdown("""
@@ -61,6 +61,36 @@ div[data-testid="stMetric"] {background:#fff;padding:10px 12px;border-radius:10p
 div[data-testid="stDataFrame"] {border:1px solid #e2e8f0;border-radius:9px;overflow:hidden;}
 div[data-testid="stExpander"] {border:1px solid #e2e8f0;border-radius:9px;}
 .risk-orange {background:#fff3e8;color:#994d00;border-left:4px solid #f97316;}
+
+/* Compact charcoal interface */
+[data-testid="stAppViewContainer"] {background:#0b0f14!important;color:#e5e7eb!important;}
+[data-testid="stHeader"] {background:rgba(11,15,20,.94)!important;}
+[data-testid="stToolbar"] {background:transparent!important;}
+section[data-testid="stSidebar"] {background:#111820!important;border-right:1px solid #263341!important;}
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h1,
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2,
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 {color:#f3f4f6!important;font-size:1rem!important;margin:.45rem 0!important;}
+.block-container {max-width:1480px;padding-top:1rem;padding-bottom:1.5rem;}
+.main-title {font-size:21px;font-weight:800;color:#f8fafc;margin-bottom:2px;letter-spacing:.01em;}
+.sub-title {font-size:10px;color:#94a3b8;margin-bottom:8px;letter-spacing:.07em;}
+.app-hero {background:linear-gradient(110deg,#151d27 0%,#202c39 100%);border:1px solid #344253;padding:16px 20px;border-radius:12px;color:#f8fafc;margin:8px 0 12px;box-shadow:none;}
+.app-hero-kicker {font-size:9px;letter-spacing:.14em;font-weight:800;color:#93c5fd;}
+.app-hero-title {font-size:20px;font-weight:800;line-height:1.2;margin:5px 0;}
+.app-hero-copy {font-size:11px;color:#cbd5e1;max-width:900px;line-height:1.5;}
+.nav-card {background:#151d27;border:1px solid #2b3948;border-radius:10px;padding:11px 13px;min-height:80px;box-shadow:none;}
+.nav-card-title {font-weight:700;color:#e5edf6;font-size:12px;margin-bottom:3px;}
+.nav-card-copy {color:#94a3b8;font-size:10px;line-height:1.4;}
+div[data-testid="stMetric"] {background:#151d27!important;border:1px solid #2b3948!important;border-radius:10px!important;box-shadow:none!important;padding:10px 12px!important;}
+div[data-testid="stMetricLabel"] {color:#94a3b8!important;font-size:11px!important;}
+div[data-testid="stMetricValue"] {color:#f8fafc!important;font-size:1.65rem!important;}
+div[data-testid="stDataFrame"], div[data-testid="stTable"] {border:1px solid #2b3948;border-radius:9px;overflow:hidden;}
+div[data-testid="stExpander"] {background:#131b24;border:1px solid #2b3948;border-radius:9px;}
+div[data-testid="stTabs"] button {font-size:11px;font-weight:700;color:#aab7c6;}
+div[data-testid="stTabs"] button[aria-selected="true"] {color:#93c5fd!important;}
+div[data-testid="stButton"] button, div[data-testid="stDownloadButton"] button, div[data-testid="stPageLink"] a {border-radius:8px;font-weight:700;}
+div[data-testid="stFileUploader"] section {background:#151d27;border:1px dashed #425366;border-radius:9px;}
+hr {border-color:#293746!important;}
+[data-testid="stAlert"] {border-radius:9px;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -562,26 +592,18 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("#### Truy cập nhanh")
-nav1, nav2, nav3 = st.columns(3, gap="medium")
-with nav1:
-    st.markdown('<div class="nav-card"><div class="nav-card-title">📦 Phân tích kho lấy hàng</div><div class="nav-card-copy">Đối chiếu địa chỉ NPP với ma trận kho; phân tích riêng xe khách hàng, xe nhà máy và xe thuê ngoài.</div></div>', unsafe_allow_html=True)
-    st.page_link("pages/02_Phan_tich_lay_hang.py", label="Mở phân tích kho lấy hàng", icon=":material/warehouse:", use_container_width=True)
-with nav2:
-    st.markdown('<div class="nav-card"><div class="nav-card-title">📊 Tổng quan kinh doanh</div><div class="nav-card-copy">Doanh thu, sản lượng, hành vi mua hàng và biến động giữa các kỳ.</div></div>', unsafe_allow_html=True)
-    st.caption("Khu vực hiện tại")
-with nav3:
-    st.markdown('<div class="nav-card"><div class="nav-card-title">🗃 Hồ sơ kiểm soát</div><div class="nav-card-copy">Lưu phiên phân tích, theo dõi phát hiện, giải trình và bằng chứng.</div></div>', unsafe_allow_html=True)
-    st.caption("Nằm ở cuối trang")
+st.markdown("""
+<div class="app-hero">
+  <div class="app-hero-kicker">CONTROL WORKSPACE</div>
+  <div class="app-hero-title">Kiểm soát kinh doanh Nhà phân phối</div>
+  <div class="app-hero-copy">Tập trung dữ liệu, đánh giá ngoại lệ và truy vết bằng chứng trên cùng một giao diện.</div>
+</div>
+""", unsafe_allow_html=True)
 
 with st.sidebar:
-    st.markdown("## 🧭 ĐIỀU HƯỚNG")
-    st.page_link("app_v3.py", label="Tổng quan kinh doanh", icon=":material/dashboard:", use_container_width=True)
-    st.page_link("pages/02_Phan_tich_lay_hang.py", label="Phân tích kho lấy hàng", icon=":material/warehouse:", use_container_width=True)
-    st.divider()
-    st.markdown("## 1. DỮ LIỆU")
-    uploaded = st.file_uploader("Tải báo cáo Excel (.xlsx)", type=["xlsx"])
-    st.caption("Chọn một workbook mỗi lần phân tích để tránh cộng trùng dữ liệu giữa các báo cáo.")
+    st.markdown("### :material/database: DỮ LIỆU")
+    uploaded = st.file_uploader("Tải báo cáo Excel", type=["xlsx"])
+    st.caption("Mỗi lần phân tích chọn một workbook.")
 
 if uploaded is None:
     st.info("Tải báo cáo Excel để bắt đầu phân tích mới. Bạn vẫn có thể truy cập hồ sơ kiểm soát và sổ phát hiện đã lưu ở bên dưới.")
@@ -600,7 +622,7 @@ if not sheet_options:
     st.stop()
 
 with st.sidebar:
-    st.markdown("## 2. CHỌN SHEET")
+    st.markdown("## :material/table_chart: CHỌN SHEET")
     sheet_names = [x["sheet"] for x in sheet_options]
     best_sheet = sheet_options[0]["sheet"]
     selected_sheet = st.selectbox(
@@ -778,7 +800,7 @@ if not mapped["customer_type"]:
     npp_mask = pd.Series(False, index=df.index)
 
 with st.sidebar:
-    st.markdown("## 3. PHẠM VI NPP")
+    st.markdown("## :material/groups: PHẠM VI NPP")
     found_types = sorted(x for x in df["_loai_kh"].dropna().unique().tolist() if clean(x))
     default_npp_types = [x for x in found_types if norm(x) in NPP_TYPES]
     selected_types = st.multiselect(
@@ -800,7 +822,7 @@ if npp.empty:
 
 # Simple filters. Unmapped rows remain available in the separate data-quality tab.
 with st.sidebar:
-    st.markdown("## 4. BỘ LỌC")
+    st.markdown("## :material/filter_alt: BỘ LỌC")
     regions_found = sorted(x for x in npp["_vung"].unique() if x)
     selected_regions = st.multiselect("Vùng / nhóm địa chỉ", regions_found, default=regions_found)
     customers_found = sorted(npp["_ten_kh"].dropna().unique().tolist())
@@ -1110,7 +1132,7 @@ else:
 if len(month_list) >= 2:
     default_cut_index = max(0, min(len(month_list) - 2, 4))
     with st.sidebar:
-        st.markdown("## 5. SO SÁNH BIẾN ĐỘNG")
+        st.markdown("## :material/compare_arrows: SO SÁNH BIẾN ĐỘNG")
         split_month = st.selectbox(
             "Tháng kết thúc kỳ trước",
             options=month_list[:-1],
@@ -1964,9 +1986,9 @@ ai_assessment_rows.append({
 ai_assessment = pd.DataFrame(ai_assessment_rows)
 
 tab_overview, tab_sales, tab_monthly, tab_warehouse, tab_vehicle, tab_risk, tab_control, tab_unknown = st.tabs([
-    "1. Tổng quan", "2. Doanh thu & mặt hàng", "3. Biến động theo tháng",
-    "4. Kho lấy hàng", "5. Xe khách hàng", "6. Đánh giá rủi ro",
-    "7. Quản lý kiểm soát", "8. Chưa nhận diện"
+    "01 🏠 Tổng quan", "02 📊 Doanh thu & mặt hàng", "03 📈 Biến động theo tháng",
+    "04 🏬 Kho lấy hàng", "05 🚚 Xe khách hàng", "06 🧠 Đánh giá rủi ro",
+    "07 🗂️ Quản lý kiểm soát", "08 🔎 Chưa nhận diện"
 ])
 
 with tab_overview:
@@ -2016,7 +2038,7 @@ with tab_overview:
         f"{high_risk:,} NPP mức cao/rất cao"
     )
 
-    st.markdown("### Đánh giá các trụ cột kiểm soát")
+    st.markdown("### :material/rule: Đánh giá các trụ cột kiểm soát")
     quality_col, warehouse_col, business_col = st.columns(3)
     with business_col:
         if revenue_change is None and quantity_change is None:
@@ -2086,7 +2108,7 @@ with tab_overview:
             f"dòng thiếu ngày chứng từ trong toàn bộ dữ liệu: {undated_count}."
         )
 
-    st.markdown("### Đánh giá tự động theo từng trụ cột")
+    st.markdown("### :material/psychology: Đánh giá tự động theo từng trụ cột")
     st.caption(
         "Hệ thống sử dụng quy tắc định lượng, ngưỡng cảnh báo và bằng chứng trong workbook "
         "để tạo nhận định, căn cứ, việc cần xác minh và mức ưu tiên. Đây là AI hỗ trợ sàng lọc có thể giải thích; "
@@ -2094,7 +2116,7 @@ with tab_overview:
     )
     st.dataframe(ai_assessment, use_container_width=True, hide_index=True)
 
-    st.markdown("### Nhận xét tự động")
+    st.markdown("### :material/auto_awesome: Nhận xét tự động")
     if not auto_comments:
         st.info("Chưa phát sinh nhận xét tự động; cần kiểm tra các báo cáo chi tiết.")
     else:
@@ -2112,7 +2134,7 @@ with tab_overview:
                 unsafe_allow_html=True
             )
 
-    st.markdown("### 1.1 Kết quả kiểm soát kho theo ngày")
+    st.markdown("### :material/calendar_view_day: Kết quả kiểm soát kho theo ngày")
     st.caption("Cột: số sự kiện kho phù hợp, kho cần xác minh, chưa đủ căn cứ. Đường: tỷ lệ phù hợp trực tiếp.")
     if daily_summary.empty or (
         (daily_summary[["Kho_phu_hop", "Kho_can_xac_minh", "Kho_chua_ket_luan"]].sum().sum()) == 0
@@ -2157,7 +2179,7 @@ with tab_overview:
         fig.update_yaxes(range=[0, 100], secondary_y=True)
         st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("### 1.2 Bảng tổng hợp theo ngày")
+    st.markdown("### :material/table_chart: Bảng tổng hợp theo ngày")
     if daily_summary.empty:
         st.info("Không có dữ liệu theo ngày.")
     else:
@@ -2217,7 +2239,7 @@ with tab_overview:
             key="business_daily_export",
         )
 
-    st.markdown("### NPP cần ưu tiên xác minh")
+    st.markdown("### :material/person_search: NPP cần ưu tiên xác minh")
     if risk_summary.empty:
         st.info("Chưa có dữ liệu đủ điều kiện để lập bảng đánh giá NPP.")
     else:
@@ -2273,7 +2295,7 @@ with tab_sales:
             title=f"Top {top_n} mặt hàng theo doanh thu"
         )
         st.plotly_chart(fig, use_container_width=True)
-    st.markdown("### Cảnh báo biến động doanh thu/sản lượng")
+    st.markdown("### :material/trending_up: Cảnh báo biến động doanh thu/sản lượng")
     if len(monthly_sales) >= 3:
         trend = monthly_sales.copy()
         trend["Doanh_thu_TB_3T_truoc"] = trend["Doanh_thu"].shift(1).rolling(3, min_periods=2).mean()
@@ -2320,7 +2342,7 @@ with tab_monthly:
         k2.metric("NPP tăng mạnh / quay lại", f"{n_growth:,}")
         k3.metric("Cặp dịch chuyển cùng mặt hàng", f"{len(product_shift_review):,}")
 
-        st.markdown("### Danh sách NPP biến động đáng chú ý")
+        st.markdown("### :material/groups: Danh sách NPP biến động đáng chú ý")
         review_view = customer_monthly_review[
             customer_monthly_review["Mẫu hình"] != "Tương đối ổn định"
         ].copy()
@@ -2346,7 +2368,7 @@ with tab_monthly:
                 hide_index=True
             )
 
-        st.markdown("### Diễn biến từng tháng của NPP")
+        st.markdown("### :material/monitoring: Diễn biến từng tháng của NPP")
         monthly_customer_options = sorted(
             monthly_panel["_ten_kh"].dropna().unique().tolist()
         ) if not monthly_panel.empty else []
@@ -2389,7 +2411,7 @@ with tab_monthly:
                 hide_index=True
             )
 
-        st.markdown("### Bất thường tăng/giảm đột ngột trong từng tháng")
+        st.markdown("### :material/warning: Bất thường tăng/giảm đột ngột trong từng tháng")
         if monthly_anomalies.empty:
             st.success("Chưa phát hiện tháng có doanh thu/sản lượng biến động từ 3 lần hoặc giảm xuống 20% trở xuống so với trung vị 3 tháng trước.")
         else:
@@ -2404,7 +2426,7 @@ with tab_monthly:
                 hide_index=True
             )
 
-        st.markdown("### Dấu hiệu dịch chuyển sản lượng cùng mặt hàng và khu vực")
+        st.markdown("### :material/move_up: Dấu hiệu dịch chuyển sản lượng cùng mặt hàng và khu vực")
         st.caption(
             "Đây là danh sách cặp cần xác minh khi một NPP giảm mạnh, NPP khác tăng/mới phát sinh "
             "trên cùng mã hàng và cùng vùng. Không tự động kết luận khách hàng đã chuyển giao."
@@ -2433,7 +2455,7 @@ with tab_warehouse:
     c.metric("Kho HS Home / thiếu dữ liệu", f"{len(warehouse_special) + len(warehouse_unknown):,}")
     if not warehouse_counts.empty:
         st.dataframe(warehouse_counts, use_container_width=True, hide_index=True)
-    st.markdown("### Giao dịch kho ngoài vùng ưu tiên")
+    st.markdown("### :material/wrong_location: Giao dịch kho ngoài vùng ưu tiên")
     if warehouse_evidence.empty:
         st.success("Không có giao dịch ngoài vùng ưu tiên theo ma trận sàng lọc hiện tại.")
     else:
@@ -2472,7 +2494,7 @@ with tab_warehouse:
             "_ngay": "Ngày", "_bien_so_goc": "Biển số xe"
         }), use_container_width=True, hide_index=True)
 
-    st.markdown("### Giao dịch chưa đủ dữ liệu")
+    st.markdown("### :material/assignment_late: Giao dịch chưa đủ dữ liệu")
     if warehouse_unknown.empty:
         st.success("Không có giao dịch kho thiếu thông tin.")
     else:
@@ -2481,7 +2503,7 @@ with tab_warehouse:
             "_ma_kho", "_ten_kho", "_doi_chieu_kho", "_doi_chieu_kho_tong_hop",
             "_kho_vung_file", "_ghi_chu_kho_file", "_ngay"
         ]], use_container_width=True, hide_index=True)
-    st.markdown("### Cách xử lý đề xuất")
+    st.markdown("### :material/task_alt: Cách xử lý đề xuất")
     st.write(
         "1. Xác minh địa chỉ NPP và vùng địa lý thực tế. "
         "2. Lấy 3 số đầu của Số chứng từ (ví dụ 263.18067094 -> 263), rồi tra tên kho trong danh mục. "
@@ -2498,7 +2520,7 @@ with tab_vehicle:
     a.metric("Dòng xe khách hàng", f"{len(customer_vehicle):,}")
     b.metric("Xe nhiều NPP cùng ngày", f"{len(vehicle_day_shared):,}")
     c.metric("Xe nhiều NPP qua nhiều ngày", f"{len(vehicle_period_shared):,}")
-    st.markdown("### Một xe phục vụ nhiều NPP trong cùng ngày")
+    st.markdown("### :material/local_shipping: Một xe phục vụ nhiều NPP trong cùng ngày")
     if vehicle_day_shared.empty:
         st.success("Chưa phát hiện xe hợp lệ phục vụ từ hai NPP trở lên trong cùng ngày.")
     else:
@@ -2509,7 +2531,7 @@ with tab_vehicle:
             "So_kho": "Số kho", "So_dia_diem": "Số địa điểm",
             "So_giao_dich": "Số dòng giao dịch", "Danh_sach_kho": "Danh sách kho"
         }), use_container_width=True, hide_index=True)
-    st.markdown("### Một xe phục vụ nhiều NPP qua nhiều ngày")
+    st.markdown("### :material/directions_car: Một xe phục vụ nhiều NPP qua nhiều ngày")
     if vehicle_period_shared.empty:
         st.success("Chưa phát hiện xe được nhiều NPP sử dụng trong các ngày khác nhau.")
     else:
@@ -2519,7 +2541,7 @@ with tab_vehicle:
             "So_ngay_hoat_dong": "Số ngày hoạt động", "So_giao_dich": "Số dòng giao dịch",
             "Danh_sach_kho": "Danh sách kho"
         }), use_container_width=True, hide_index=True)
-    st.markdown("### Xe khách hàng thiếu hoặc không nhận diện được biển số")
+    st.markdown("### :material/commute: Xe khách hàng thiếu hoặc không nhận diện được biển số")
     invalid_vehicle = customer_vehicle[~customer_vehicle["_bien_so_hop_le"]]
     if invalid_vehicle.empty:
         st.success("Không có biển số thiếu/không đúng định dạng sàng lọc.")
@@ -2531,7 +2553,7 @@ with tab_vehicle:
             "_ten_kh": "NPP", "_ngay": "Ngày", "_chung_tu": "Chứng từ",
             "_bien_so_goc": "Giá trị số xe gốc", "_dia_chi": "Địa chỉ", "_ma_kho": "Mã kho"
         }), use_container_width=True, hide_index=True)
-    st.markdown("### Hướng xác minh")
+    st.markdown("### :material/fact_check: Hướng xác minh")
     st.write(
         "Cùng biển số trong cùng ngày là dấu hiệu cần kiểm tra, chưa đủ để kết luận bất thường. "
         "Đối chiếu giờ lấy hàng, số chứng từ, chủ xe, tài xế, người nhận và lộ trình. "
@@ -2579,7 +2601,7 @@ with tab_risk:
                     use_container_width=True,
                     hide_index=True
                 )
-            st.markdown("### Giao dịch làm căn cứ")
+            st.markdown("### :material/receipt_long: Giao dịch làm căn cứ")
             st.dataframe(evidence[[
                 "_ngay", "_chung_tu", "_dia_chi", "_vung", "_ma_kho", "_ten_kho",
                 "_doi_chieu_kho", "_loai_xe", "_bien_so_goc",
@@ -2592,7 +2614,7 @@ with tab_risk:
                 "_ma_hang": "Mã hàng", "_ten_hang": "Tên hàng"
             }), use_container_width=True, hide_index=True)
 
-    st.markdown("### Thang màu")
+    st.markdown("### :material/palette: Thang màu")
     cols = st.columns(5)
     legend = [
         ("XANH", "0–24 điểm", "risk-low"),

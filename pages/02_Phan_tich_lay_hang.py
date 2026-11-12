@@ -21,7 +21,7 @@ st.set_page_config(
     page_title="Phân tích kho lấy hàng | Business Control",
     page_icon="📦",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 st.markdown("""
@@ -58,6 +58,36 @@ div[data-testid="stExpander"] {background:white;border:1px solid #e2e8f0;border-
 .pill-watch {background:#fef3c7;color:#92400e;}
 .pill-low {background:#dcfce7;color:#166534;}
 div[data-testid="stDownloadButton"] button {border-radius:10px;font-weight:700;}
+
+/* Shared compact charcoal theme */
+[data-testid="stAppViewContainer"] {background:#0b0f14!important;color:#e5e7eb!important;}
+[data-testid="stHeader"] {background:rgba(11,15,20,.94)!important;}
+section[data-testid="stSidebar"] {background:#111820!important;border-right:1px solid #263341!important;}
+.block-container {max-width:1480px;padding-top:.9rem;padding-bottom:1.5rem;}
+.hero {background:linear-gradient(110deg,#151d27 0%,#202c39 100%);border:1px solid #344253;padding:16px 20px;border-radius:12px;color:#f8fafc;margin:6px 0 12px;box-shadow:none;}
+.hero-kicker {font-size:9px;letter-spacing:.14em;font-weight:800;color:#93c5fd;}
+.hero-title {font-size:20px;font-weight:800;line-height:1.2;margin:5px 0;}
+.hero-sub {font-size:11px;color:#cbd5e1;max-width:1000px;line-height:1.45;}
+.section-title {font-size:13px;font-weight:800;color:#cbd5e1;margin:8px 0;letter-spacing:.04em;}
+.section-note {color:#94a3b8;font-size:11px;margin-top:-4px;margin-bottom:8px;}
+div[data-testid="stMetric"] {background:#151d27!important;border:1px solid #2b3948!important;border-radius:9px!important;padding:9px 11px!important;box-shadow:none!important;}
+div[data-testid="stMetricLabel"] {color:#94a3b8!important;font-size:10px!important;}
+div[data-testid="stMetricValue"] {color:#f8fafc!important;font-size:1.55rem!important;}
+div[data-testid="stDataFrame"],div[data-testid="stTable"] {border:1px solid #2b3948;border-radius:9px;overflow:hidden;}
+div[data-testid="stTabs"] button {font-weight:700;font-size:11px;color:#aab7c6;}
+div[data-testid="stTabs"] button[aria-selected="true"] {color:#93c5fd!important;}
+div[data-testid="stExpander"] {background:#131b24;border:1px solid #2b3948;border-radius:9px;}
+div[data-testid="stDownloadButton"] button,div[data-testid="stButton"] button {border-radius:8px;font-weight:700;}
+div[data-testid="stFileUploader"] section {background:#151d27;border:1px dashed #425366;border-radius:9px;}
+.finding {background:#151d27;border:1px solid #2b3948;border-radius:10px;padding:11px 13px;margin:6px 0;box-shadow:none;}
+.finding-title {font-size:12px;font-weight:800;color:#e5edf6;margin-bottom:4px;}
+.finding-meta {font-size:10px;font-weight:700;letter-spacing:.03em;color:#94a3b8;margin-bottom:6px;}
+.finding-body {font-size:11px;color:#cbd5e1;line-height:1.5;}
+.pill {display:inline-block;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:800;background:#263341;color:#cbd5e1;}
+.pill-high {background:#4a2228;color:#fecaca;}
+.pill-watch {background:#49391e;color:#fde68a;}
+.pill-low {background:#183d31;color:#bbf7d0;}
+hr {border-color:#293746!important;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -68,13 +98,6 @@ st.markdown("""
   <div class="hero-sub">Đối chiếu địa chỉ Nhà phân phối với ma trận kho · Phân tích xe khách hàng · Tách riêng xe nhà máy và xe nhà máy thuê ngoài · Cảnh báo có căn cứ, có thể giải trình</div>
 </div>
 """, unsafe_allow_html=True)
-st.page_link("app_v3.py", label="← Trở về tổng quan kinh doanh", icon=":material/dashboard:", use_container_width=False)
-with st.sidebar:
-    st.markdown("### 🧭 ĐIỀU HƯỚNG")
-    st.page_link("app_v3.py", label="Tổng quan kinh doanh", icon=":material/dashboard:", use_container_width=True)
-    st.page_link("pages/02_Phan_tich_lay_hang.py", label="Phân tích kho lấy hàng", icon=":material/warehouse:", use_container_width=True)
-    st.divider()
-    st.caption("PHÂN TÍCH KHO LẤY HÀNG")
 
 ALLOWED_LABELS = [
     "Đơn hàng nội địa",
