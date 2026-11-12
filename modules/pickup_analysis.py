@@ -176,7 +176,7 @@ def analyze_customer_pickups(
                 "Mâu thuẫn: ma trận phù hợp nhưng Ghi chú2 ghi Không hợp lý",
             ]).sum()),
             Số_chưa_đủ_dữ_liệu=("Kết quả đối chiếu", lambda s: s.str.startswith(("Chưa", "Thiếu", "Mã kho")).sum()),
-            Số_biển_số=("Biển số xe", lambda s: s.replace("", pd.NA).nunique()),
+            Số_biển_số=("Biển số xe", lambda s: s[s.astype(str).str.strip().ne("")].nunique()),
         )
         .reset_index()
     )
