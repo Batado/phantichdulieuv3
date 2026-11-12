@@ -135,14 +135,41 @@ def _secret_database_url() -> str:
     return os.getenv("DATABASE_URL", "").strip()
 
 
+def _normalize_database_url(raw: str) -> str:
+    """Normalize Supabase URLs and safely encode special characters in passwords.
+
+    A raw '@' in a password is otherwise mistaken for the end of user-info,
+    causing DNS errors against a host such as '...@aws-...pooler.supabase.com'.
+    """
+    from urllib.parse import quote, unquote
+
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    if "://" not in raw:
+        raise ValueError("DATABASE_URL không đúng định dạng URL PostgreSQL.")
+    scheme, remainder = raw.split("://", 1)
+    authority, slash, path = remainder.partition("/")
+    user_info, at_sign, host = authority.rpartition("@")
+    if not at_sign:
+        raise ValueError("DATABASE_URL thiếu phần @HOST. Kiểm tra lại chuỗi kết nối Supabase.")
+    username, colon, password = user_info.partition(":")
+    if not colon or not username or not host:
+        raise ValueError("DATABASE_URL thiếu username, password hoặc hostname.")
+    # Decode first so already URL-encoded passwords are not double-encoded.
+    username = quote(unquote(username), safe="")
+    password = quote(unquote(password), safe="")
+    if scheme in {"postgres", "postgresql"}:
+        scheme = "postgresql+psycopg"
+    suffix = ("/" + path) if slash else ""
+    return f"{scheme}://{username}:{password}@{host}{suffix}"
+
+
 @st.cache_resource(show_spinner=False)
 def _engine_and_mode() -> tuple[Engine, str]:
-    url = _secret_database_url()
-    if url:
-        if url.startswith("postgres://"):
-            url = "postgresql+psycopg://" + url[len("postgres://"):]
-        elif url.startswith("postgresql://"):
-            url = "postgresql+psycopg://" + url[len("postgresql://"):]
+    raw_url = _secret_database_url()
+    if raw_url:
+        url = _normalize_database_url(raw_url)
         engine = create_engine(url, pool_pre_ping=True, pool_recycle=1800)
         mode = "PostgreSQL"
     else:
