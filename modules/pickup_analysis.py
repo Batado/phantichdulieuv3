@@ -202,6 +202,10 @@ def analyze_customer_pickups(
         locality = norm(row["_source_locality"])
         if not locality:
             return "Thiếu Khu vực"
+        for prefix in ("tinh ", "thanh pho ", "tp "):
+            if locality.startswith(prefix):
+                locality = locality[len(prefix):].strip()
+                break
         parts = _address_parts(row["_address"])
         normalized_parts = []
         for part in parts:
