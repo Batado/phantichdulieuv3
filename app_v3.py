@@ -75,67 +75,6 @@ WAREHOUSE_NAMES = {
     "301": "TK Nam Cấm", "302": "TK Nam Cấm",
 }
 
-# Quy tắc địa chỉ -> nhóm khu vực -> danh sách mã kho chấp nhận.
-# Danh sách được giữ đúng theo ma trận người dùng cung cấp; không tự mở rộng kho.
-ADDRESS_WAREHOUSE_RULES = {
-    "Miền Bắc": {
-        "keywords": [
-            "hai phong", "thanh pho hai phong", "ha noi", "thanh pho ha noi",
-            "hung yen", "bac ninh", "quang ninh", "ninh binh", "thanh hoa",
-            "nghe an", "ha tinh", "tuyen quang", "phu tho", "thai nguyen",
-            "lao cai", "lai chau", "son la", "dien bien", "xa nghia dan",
-            "xa kim anh", "phuong tam thanh", "phuong quyet thang", "phuong minh xuan"
-        ],
-        "warehouses": {"261", "291"},
-    },
-    "Miền Trung - Huế và Quảng Trị": {
-        "keywords": ["hue", "thua thien hue", "quang tri"],
-        "warehouses": {"251", "261", "263"},
-    },
-    "Miền Trung - Đà Nẵng": {
-        "keywords": ["da nang", "thanh pho da nang"],
-        "warehouses": {"251", "263"},
-    },
-    "Miền Trung - Khánh Hòa và Quảng Ngãi": {
-        "keywords": ["khanh hoa", "quang ngai"],
-        "warehouses": {"251", "263", "053", "284"},
-    },
-    "Miền Trung - Tây Nguyên": {
-        "keywords": [
-            "dak lak", "daklak", "gia lai", "lam dong", "xa duc lap",
-            "xa cat tien 2", "xa cat tien", "xa nam ban lam ha", "xa quang lap",
-            "xa duc trong", "phuong lam vien da lat"
-        ],
-        "warehouses": {"251", "252", "263", "053", "054", "284"},
-    },
-    "Miền Nam - Đông Nam Bộ": {
-        "keywords": [
-            "dong nai", "thanh pho dong nai", "ho chi minh", "thanh pho ho chi minh",
-            "tay ninh", "binh duong", "ba ria vung tau", "ba ria vung tau",
-            "quan thu duc", "phuong thong nhat"
-        ],
-        "warehouses": {"053", "054", "281", "284"},
-    },
-    "Miền Nam - Tây Nam Bộ": {
-        "keywords": ["an giang", "dong thap", "vinh long", "can tho", "thanh pho can tho", "ca mau"],
-        "warehouses": {"053", "054", "281", "284"},
-    },
-}
-# Dùng Miền2 chỉ khi địa chỉ không đủ thông tin để nhận diện tỉnh/thành.
-# Tây Nguyên được gộp vào Miền Trung - Tây Nguyên, tuyệt đối không gán Miền Bắc.
-BROAD_REGION_RULES = {
-    "Miền Bắc": {"261", "291"},
-    "Miền Trung": {"251", "261", "263", "053", "284"},
-    "Miền Trung - Tây Nguyên": {"251", "252", "263", "053", "054", "284"},
-    "Tây Nguyên": {"251", "252", "263", "053", "054", "284"},
-    "Miền Nam": {"053", "054", "281", "284"},
-    "Miền Tây": {"053", "054", "281", "284"},
-}
-SPECIAL_WAREHOUSES = {"282", "292"}
-WAREHOUSE_STATUS_OUTSIDE = "Ngoài danh sách kho hợp lý - cần xác minh"
-WAREHOUSE_STATUS_SPECIAL = "Kho hàng gửi HS Home - cần xác minh riêng"
-WAREHOUSE_STATUS_FALLBACK = "Phù hợp theo miền tổng quát - cần xác minh địa chỉ"
-
 NPP_TYPES = {
     "nha phan phoi ong nhua",
     "nha phan phoi nhua kd ton thep",
@@ -349,123 +288,6 @@ def classify_transport(value):
     return "Chưa xác định"
 
 
-def identify_region(region_value, address):
-    """
-    Xác định vùng theo TỈNH/THÀNH PHỐ ghi trong địa chỉ trước.
-    Chỉ dùng Miền2 gốc làm dự phòng khi địa chỉ không có tỉnh/thành nhận diện được.
-
-    Lý do: tên xã/phường có thể trùng tên tỉnh cũ hoặc tỉnh khác
-    (ví dụ Xã Tuyên Quang thuộc Tỉnh Lâm Đồng). Không được dò chuỗi
-    toàn địa chỉ rồi chọn từ khóa dài nhất vì sẽ gán nhầm địa bàn.
-    """
-    raw_address = clean(address)
-    address_norm = norm(raw_address)
-
-    # Tỉnh/thành phố là cấp địa giới có độ tin cậy cao nhất trong địa chỉ.
-    # Tách theo dấu phẩy để không nhầm tên xã/phường với tên tỉnh.
-    province_region = {
-        "ha noi": "Miền Bắc",
-        "hai phong": "Miền Bắc",
-        "hung yen": "Miền Bắc",
-        "bac ninh": "Miền Bắc",
-        "quang ninh": "Miền Bắc",
-        "ninh binh": "Miền Bắc",
-        "thanh hoa": "Miền Bắc",
-        "nghe an": "Miền Bắc",
-        "ha tinh": "Miền Bắc",
-        "tuyen quang": "Miền Bắc",
-        "phu tho": "Miền Bắc",
-        "thai nguyen": "Miền Bắc",
-        "lao cai": "Miền Bắc",
-        "lai chau": "Miền Bắc",
-        "son la": "Miền Bắc",
-        "dien bien": "Miền Bắc",
-
-        "hue": "Miền Trung - Huế và Quảng Trị",
-        "thua thien hue": "Miền Trung - Huế và Quảng Trị",
-        "quang tri": "Miền Trung - Huế và Quảng Trị",
-        "da nang": "Miền Trung - Đà Nẵng",
-        "khanh hoa": "Miền Trung - Khánh Hòa và Quảng Ngãi",
-        "quang ngai": "Miền Trung - Khánh Hòa và Quảng Ngãi",
-        "dak lak": "Miền Trung - Tây Nguyên",
-        "daklak": "Miền Trung - Tây Nguyên",
-        "gia lai": "Miền Trung - Tây Nguyên",
-        "lam dong": "Miền Trung - Tây Nguyên",
-
-        "dong nai": "Miền Nam - Đông Nam Bộ",
-        "ho chi minh": "Miền Nam - Đông Nam Bộ",
-        "tay ninh": "Miền Nam - Đông Nam Bộ",
-        "binh duong": "Miền Nam - Đông Nam Bộ",
-        "ba ria vung tau": "Miền Nam - Đông Nam Bộ",
-
-        "an giang": "Miền Nam - Tây Nam Bộ",
-        "dong thap": "Miền Nam - Tây Nam Bộ",
-        "vinh long": "Miền Nam - Tây Nam Bộ",
-        "can tho": "Miền Nam - Tây Nam Bộ",
-        "ca mau": "Miền Nam - Tây Nam Bộ",
-    }
-
-    province_segments = []
-    for segment in re.split(r"[,;|]", raw_address):
-        seg = norm(segment).strip()
-        if seg.startswith("tinh "):
-            province_segments.append(seg[len("tinh "):].strip())
-        elif seg.startswith("thanh pho "):
-            province_segments.append(seg[len("thanh pho "):].strip())
-
-    # Ưu tiên tỉnh/thành được ghi rõ; kiểm tra từ cuối địa chỉ về đầu
-    # để ưu tiên phần địa giới hành chính chính thức gần cuối địa chỉ.
-    for province in reversed(province_segments):
-        if province in province_region:
-            return province_region[province]
-
-    # Dự phòng cho địa chỉ không ghi tiền tố "Tỉnh/Thành phố".
-    # Chỉ dò từng thành phần địa chỉ, không dò chuỗi toàn địa chỉ.
-    address_keywords = {
-        "Miền Bắc": [
-            "hai phong", "ha noi", "hung yen", "bac ninh", "quang ninh",
-            "ninh binh", "thanh hoa", "nghe an", "ha tinh", "phu tho",
-            "thai nguyen", "lao cai", "lai chau", "son la", "dien bien",
-            "xa nghia dan", "xa kim anh", "phuong tam thanh",
-            "phuong quyet thang", "phuong minh xuan"
-        ],
-        "Miền Trung - Huế và Quảng Trị": ["hue", "thua thien hue", "quang tri"],
-        "Miền Trung - Đà Nẵng": ["da nang"],
-        "Miền Trung - Khánh Hòa và Quảng Ngãi": ["khanh hoa", "quang ngai"],
-        "Miền Trung - Tây Nguyên": [
-            "dak lak", "daklak", "gia lai", "lam dong", "xa duc lap",
-            "xa cat tien 2", "xa cat tien", "xa nam ban lam ha",
-            "xa quang lap", "xa duc trong", "phuong lam vien da lat"
-        ],
-        "Miền Nam - Đông Nam Bộ": [
-            "dong nai", "ho chi minh", "tay ninh", "binh duong",
-            "ba ria vung tau", "quan thu duc", "phuong thong nhat"
-        ],
-        "Miền Nam - Tây Nam Bộ": ["an giang", "dong thap", "vinh long", "can tho", "ca mau"],
-    }
-    address_parts = [norm(x).strip() for x in re.split(r"[,;|]", raw_address) if norm(x).strip()]
-    for group, keywords in address_keywords.items():
-        for part in address_parts:
-            for keyword in keywords:
-                key = norm(keyword)
-                if part == key or part.endswith(" " + key) or part.startswith(key + " "):
-                    return group
-
-    # Không suy đoán từ tên xã/phường nếu tỉnh/thành đã không nhận diện được.
-    # Dùng Miền2 gốc làm dự phòng và chuẩn hóa Tây Nguyên về Miền Trung - Tây Nguyên.
-    r = norm(region_value)
-    if "tay nguyen" in r:
-        return "Miền Trung - Tây Nguyên"
-    if "mien bac" in r or r == "bac":
-        return "Miền Bắc"
-    if "mien trung" in r or r == "trung":
-        return "Miền Trung"
-    if "mien tay" in r or "dbscl" in r:
-        return "Miền Tây"
-    if "mien nam" in r or "dong nam bo" in r or r == "nam":
-        return "Miền Nam"
-    return "Chưa xác định vùng"
-
 def extract_warehouse_code(document_number):
     """Lấy 3 chữ số đầu Số chứng từ: 263.18067094 -> 263."""
     text = clean(document_number).strip()
@@ -475,63 +297,6 @@ def extract_warehouse_code(document_number):
 
 def warehouse_name(code):
     return WAREHOUSE_NAMES.get(code, "Mã kho chưa có trong danh mục")
-
-
-def allowed_warehouses_for_region(region):
-    if region in ADDRESS_WAREHOUSE_RULES:
-        return ADDRESS_WAREHOUSE_RULES[region]["warehouses"], "Địa chỉ cụ thể"
-    if region in BROAD_REGION_RULES:
-        return BROAD_REGION_RULES[region], "Miền2 dự phòng"
-    return set(), "Chưa xác định"
-
-
-def warehouse_check(region, warehouse):
-    if not warehouse:
-        return "Không trích xuất được mã kho từ số chứng từ"
-    if warehouse not in WAREHOUSE_NAMES:
-        return "Mã kho chưa có trong danh mục"
-    if warehouse in SPECIAL_WAREHOUSES:
-        return WAREHOUSE_STATUS_SPECIAL
-    allowed, basis = allowed_warehouses_for_region(region)
-    if not allowed:
-        return "Chưa đủ dữ liệu địa chỉ/vùng"
-    if warehouse in allowed:
-        return WAREHOUSE_STATUS_FALLBACK if basis == "Miền2 dự phòng" else "Phù hợp danh mục kho"
-    return WAREHOUSE_STATUS_OUTSIDE
-
-
-def extract_warehouse_codes(value):
-    """Trích mã kho 3 chữ số từ cột kho lấy hàng vùng miền trong workbook."""
-    return set(re.findall(r"(?<!\d)(\d{3})(?!\d)", clean(value)))
-
-
-def classify_workbook_note(value):
-    """Ghi chú gốc là nguồn tham khảo bổ sung, không thay thế kiểm tra theo địa chỉ."""
-    text = norm(value)
-    if not text:
-        return "Không có ghi chú trong file"
-    if any(x in text for x in ["khong hop ly", "khong hop le", "khong phu hop", "bat hop ly", "sai kho"]):
-        return "File ghi chú: không hợp lý"
-    if any(x in text for x in ["hop ly", "phu hop", "dung kho"]):
-        return "File ghi chú: hợp lý"
-    return "Ghi chú khác - cần đọc nội dung"
-
-
-def combine_warehouse_review(base_status, warehouse, file_region_text, file_note):
-    """Đối chiếu độc lập theo địa chỉ, danh sách kho vùng miền và ghi chú có sẵn."""
-    listed_codes = extract_warehouse_codes(file_region_text)
-    note_status = classify_workbook_note(file_note)
-    if warehouse in SPECIAL_WAREHOUSES:
-        return WAREHOUSE_STATUS_SPECIAL
-    if listed_codes and warehouse and warehouse not in listed_codes:
-        return "Không khớp danh sách kho vùng miền trong file"
-    if note_status == "File ghi chú: không hợp lý":
-        if base_status in {"Phù hợp địa chỉ/khu vực", WAREHOUSE_STATUS_FALLBACK}:
-            return "Mâu thuẫn: thuật toán phù hợp nhưng file ghi không hợp lý"
-        return "Theo ghi chú file: không hợp lý - cần xác minh"
-    if note_status == "File ghi chú: hợp lý" and base_status == WAREHOUSE_STATUS_OUTSIDE:
-        return "Mâu thuẫn: file ghi hợp lý nhưng kho ngoài vùng địa chỉ"
-    return base_status
 
 
 def money_fmt(value):
@@ -699,7 +464,6 @@ def prepare_transaction_frame(source: pd.DataFrame, mapping_items: tuple, wareho
     frame["_ten_kho"] = frame["_ma_kho"].map(warehouse_name)
     frame["_kho_vung_file"] = get_col("warehouse_region_file").map(clean)
     frame["_ghi_chu_kho_file"] = get_col("warehouse_note_file").map(clean)
-    frame["_ghi_chu_kho_chuan_hoa"] = frame["_ghi_chu_kho_file"].map(classify_workbook_note)
     frame["_hinh_thuc_goc"] = get_col("method").map(clean)
     frame["_loai_xe"] = frame["_hinh_thuc_goc"].map(classify_transport)
     frame["_bien_so_goc"] = get_col("vehicle").map(clean)
