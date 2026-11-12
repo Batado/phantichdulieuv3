@@ -65,6 +65,28 @@ class PickupAnalysisTests(unittest.TestCase):
         self.assertEqual(detail.iloc[0]["Kết quả đối chiếu"], "Phù hợp danh mục kho")
         self.assertEqual(summary.iloc[0]["Số_phù_hợp"], 1)
 
+    def test_source_note_conflict_is_not_silently_marked_fit(self):
+        transactions = pd.DataFrame([{
+            "Địa chỉ": "Số 1, Tỉnh Đắk Lắk, Việt Nam",
+            "Mã kho2": 284,
+            "Số chứng từ": "284.123",
+            "Shipping method": "Xe khách hàng",
+            "Kho lấy hàng": "TK PT",
+            "Số xe": "47H-12345",
+            "Mã khách hàng": "KH02",
+            "Tên khách hàng": "NPP B",
+            "Ngày chứng từ": "2026-10-01",
+            "Ghi chú2": "Hợp lý",
+        }])
+        matrix = pd.DataFrame([{
+            "Khu vực/Tỉnh thành": "Đắk Lắk",
+            "Kho hợp lý": "Bình Định, Tây Nguyên, Đà Nẵng",
+            "Mã kho": 251252263,
+        }])
+        detail, summary, _ = analyze_customer_pickups(transactions, matrix)
+        self.assertTrue(detail.iloc[0]["Kết quả đối chiếu"].startswith("Mâu thuẫn"))
+        self.assertEqual(summary.iloc[0]["Số_ngoài_danh_mục"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
