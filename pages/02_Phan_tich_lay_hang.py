@@ -246,7 +246,7 @@ def build_ai_findings(result: dict) -> pd.DataFrame:
     findings.extend([
         {
             "Biểu tượng": "🏭",
-            "Đầu mục đánh giá": "05 · Phương tiện xe nhà máy",
+            "Đầu mục đánh giá": "08 · Phương tiện xe nhà máy",
             "Mức ưu tiên": "Chưa đủ dữ liệu",
             "Kết quả": f"{factory_count:,} dòng giao dịch được nhận diện",
             "Nhận định tự động": "Đã tách riêng giao dịch xe nhà máy, chưa chấm tính hợp lý kho hoặc biển số trong phiên bản này để tránh suy luận khi chưa có danh mục xe và quy tắc kiểm soát được duyệt.",
@@ -255,7 +255,7 @@ def build_ai_findings(result: dict) -> pd.DataFrame:
         },
         {
             "Biểu tượng": "🚛",
-            "Đầu mục đánh giá": "06 · Phương tiện xe nhà máy thuê ngoài",
+            "Đầu mục đánh giá": "09 · Phương tiện xe nhà máy thuê ngoài",
             "Mức ưu tiên": "Chưa đủ dữ liệu",
             "Kết quả": f"{outsourced_count:,} dòng giao dịch được nhận diện",
             "Nhận định tự động": "Đã tách riêng giao dịch xe nhà máy thuê ngoài. Chưa đánh giá biển số, nhà vận tải, hợp đồng và chi phí khi chưa có dữ liệu xác thực.",
