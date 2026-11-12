@@ -112,6 +112,38 @@ class PickupAnalysisTests(unittest.TestCase):
         self.assertEqual(summary.iloc[0]["Số_chứng_từ"], 1)
         self.assertEqual(summary.iloc[0]["Số_phù_hợp"], 1)
 
+    def test_uses_the_passed_warehouse_code_column(self):
+        transactions = pd.DataFrame([{
+            "Địa chỉ NPP": "Số 1, Tỉnh Đắk Lắk, Việt Nam",
+            "Mã kho xuất thực tế": 252,
+            "Số chứng từ": "252.321",
+            "Hình thức": "Xe khách hàng",
+            "Kho tên": "TK Đaklak",
+            "Biển số": "47H-12345",
+            "Mã KH": "KH09",
+            "Tên KH": "NPP custom",
+            "Ngày": "2026-10-01",
+        }])
+        matrix = pd.DataFrame([{
+            "Khu vực/Tỉnh thành": "Đắk Lắk",
+            "Kho hợp lý": "Tây Nguyên",
+            "Mã kho": 251252263,
+        }])
+        detail, summary, _ = analyze_customer_pickups(
+            transactions, matrix,
+            address_col="Địa chỉ NPP",
+            warehouse_code_col="Mã kho xuất thực tế",
+            document_col="Số chứng từ",
+            method_col="Hình thức",
+            warehouse_name_col="Kho tên",
+            plate_col="Biển số",
+            customer_id_col="Mã KH",
+            customer_name_col="Tên KH",
+            date_col="Ngày",
+        )
+        self.assertEqual(detail.iloc[0]["Mã kho thực tế"], "252")
+        self.assertEqual(detail.iloc[0]["Kết quả đối chiếu"], "Phù hợp danh mục kho")
+
 
 if __name__ == "__main__":
     unittest.main()
