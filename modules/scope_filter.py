@@ -16,12 +16,22 @@ ALLOWED_ORDER_TYPES = {
 
 
 def normalize_text(value) -> str:
-    if value is None or pd.isna(value):
+    if value is None or (not isinstance(value, (list, tuple, dict)) and pd.isna(value)):
         return ""
     text = unicodedata.normalize("NFKD", str(value).strip().lower())
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
     text = text.replace("đ", "d")
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", text)).strip()
+
+
+def normalize_order_type(value) -> str:
+    """Canonicalize ERP labels such as HBMC.DON HANG NOI DIA-DLPP."""
+    text = normalize_text(value)
+    text = re.sub(r"^(?:hbmc|hsn|hsg)\s+", "", text)
+    for allowed in ALLOWED_ORDER_TYPES:
+        if text == allowed or text.endswith(" " + allowed):
+            return allowed
+    return text
 
 
 def apply_business_scope_filter(
@@ -30,12 +40,7 @@ def apply_business_scope_filter(
     document_col: str,
     order_type_col: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Return (in_scope, excluded) without mutating the input.
-
-    PN documents are excluded first as warehouse-transfer / warehouse-send
-    records, regardless of their order-type label. Remaining rows are kept
-    only when their normalized order type is in the four approved categories.
-    """
+    """Return (in_scope, excluded) without mutating the input."""
     if document_col not in frame.columns:
         raise ValueError(f"Không tìm thấy cột số chứng từ: {document_col}")
     if order_type_col not in frame.columns:
@@ -43,7 +48,7 @@ def apply_business_scope_filter(
 
     work = frame.copy()
     documents = work[document_col].fillna("").astype(str).str.strip().str.upper()
-    order_types = work[order_type_col].map(normalize_text)
+    order_types = work[order_type_col].map(normalize_order_type)
 
     pn_mask = documents.str.startswith("PN")
     allowed_mask = order_types.isin(ALLOWED_ORDER_TYPES)
@@ -55,7 +60,4 @@ def apply_business_scope_filter(
     work.loc[(~pn_mask) & (~allowed_mask), "_ly_do_ngoai_pham_vi"] = (
         "Loại đơn hàng ngoài phạm vi phân tích"
     )
-
-    included = work.loc[keep_mask].copy()
-    excluded = work.loc[~keep_mask].copy()
-    return included, excluded
+    return work.loc[keep_mask].copy(), work.loc[~keep_mask].copy()
