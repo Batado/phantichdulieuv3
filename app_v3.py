@@ -576,14 +576,24 @@ st.markdown("""
 with st.sidebar:
     st.markdown("## ◈ BUSINESS CONTROL")
     st.caption("WORKSPACE / PHÂN TÍCH KINH DOANH")
+    st.markdown("#### ĐIỀU HƯỚNG")
+    menu_labels = {
+        "Tổng quan": "⌂  Tổng quan",
+        "Doanh thu & mặt hàng": "▥  Doanh thu & mặt hàng",
+        "Biến động theo tháng": "↗  Biến động theo tháng",
+        "Đối chiếu kho": "▦  Đối chiếu kho",
+        "Xe khách hàng": "▰  Xe khách hàng",
+        "Đánh giá rủi ro": "◈  Đánh giá rủi ro",
+        "Quản lý kiểm soát": "▤  Quản lý kiểm soát",
+        "Chưa nhận diện": "⌕  Chưa nhận diện",
+        "Phân tích kho lấy hàng": "▣  Phân tích kho lấy hàng",
+    }
     selected_analysis = st.radio(
         "ĐIỀU HƯỚNG",
-        [
-            "Tổng quan", "Doanh thu & mặt hàng", "Biến động theo tháng",
-            "Đối chiếu kho", "Xe khách hàng", "Đánh giá rủi ro",
-            "Quản lý kiểm soát", "Chưa nhận diện", "Phân tích kho lấy hàng"
-        ],
+        list(menu_labels),
+        format_func=lambda value: menu_labels[value],
         key="business_analysis_nav",
+        label_visibility="collapsed",
     )
     if selected_analysis == "Phân tích kho lấy hàng":
         st.switch_page("pages/02_Phan_tich_lay_hang.py")
@@ -773,32 +783,6 @@ scope_total = len(raw)
 scope_kept = len(df)
 scope_excluded_pn = int(scope_excluded["_ly_do_ngoai_pham_vi"].str.startswith("Số chứng từ bắt đầu bằng PN").sum())
 scope_excluded_type = len(scope_excluded) - scope_excluded_pn
-
-st.markdown("### PHẠM VI DỮ LIỆU ĐƯỢC ĐƯA VÀO PHÂN TÍCH")
-scope_k1, scope_k2, scope_k3, scope_k4 = st.columns(4)
-scope_k1.metric("Dòng nguồn", f"{scope_total:,}")
-scope_k2.metric("Dòng được giữ", f"{scope_kept:,}")
-scope_k3.metric("Loại PN / hàng gửi kho", f"{scope_excluded_pn:,}")
-scope_k4.metric("Loại do đơn hàng ngoài phạm vi", f"{scope_excluded_type:,}")
-with st.expander("Xem nhật ký các dòng bị loại khỏi phạm vi", expanded=False):
-    if scope_excluded.empty:
-        st.success("Không có dòng nào bị loại khỏi phạm vi.")
-    else:
-        excluded_view = scope_excluded.copy()
-        display_cols = [
-            col for col in [
-                "_dong_nguon", mapped.get("document"), mapped.get("order_type"),
-                "_ten_kh", "_ngay", "_ly_do_ngoai_pham_vi"
-            ] if col and col in excluded_view.columns
-        ]
-        st.dataframe(excluded_view[display_cols], use_container_width=True, hide_index=True)
-        st.download_button(
-            "Tải danh sách dòng bị loại",
-            data=build_excel_export({"Dong_bi_loai": excluded_view}),
-            file_name="Nhat_ky_loc_pham_vi.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key="scope_excluded_export",
-        )
 
 # NPP classification must be based on Loại khách hàng, not Mã nhóm KH.
 npp_mask = df["_loai_kh_norm"].isin(NPP_TYPES)
@@ -1977,6 +1961,32 @@ ai_assessment_rows.append({
 ai_assessment = pd.DataFrame(ai_assessment_rows)
 
 if selected_analysis == "Tổng quan":
+    st.markdown("### PHẠM VI DỮ LIỆU")
+    scope_k1, scope_k2, scope_k3, scope_k4 = st.columns(4)
+    scope_k1.metric("Dòng nguồn", f"{scope_total:,}")
+    scope_k2.metric("Dòng được giữ", f"{scope_kept:,}")
+    scope_k3.metric("PN / hàng gửi kho bị loại", f"{scope_excluded_pn:,}")
+    scope_k4.metric("Đơn hàng ngoài phạm vi", f"{scope_excluded_type:,}")
+    with st.expander("Nhật ký lọc phạm vi", expanded=False):
+        if scope_excluded.empty:
+            st.success("Không có dòng nào bị loại khỏi phạm vi.")
+        else:
+            excluded_view = scope_excluded.copy()
+            display_cols = [
+                col for col in [
+                    "_dong_nguon", mapped.get("document"), mapped.get("order_type"),
+                    "_ten_kh", "_ngay", "_ly_do_ngoai_pham_vi"
+                ] if col and col in excluded_view.columns
+            ]
+            st.dataframe(excluded_view[display_cols].head(1500), use_container_width=True, hide_index=True)
+            st.download_button(
+                "Tải danh sách dòng bị loại",
+                data=build_excel_export({"Dong_bi_loai": excluded_view}),
+                file_name="Nhat_ky_loc_pham_vi.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="scope_excluded_export",
+            )
+
     period_title = (
         f"Tuần {selected_period_value}"
         if report_period_type == "Tuần"
