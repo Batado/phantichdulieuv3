@@ -82,6 +82,27 @@ class PickupAnalysisTests(unittest.TestCase):
         self.assertEqual(summary.iloc[0]["Số_chưa_đủ_dữ_liệu"], 1)
         self.assertEqual(summary.iloc[0]["Số_phù_hợp"], 0)
 
+
+    def test_khu_vuc_city_prefix_matches_address_without_prefix(self):
+        transactions = pd.DataFrame([{
+            "Địa chỉ": "Số 70, Phường Cái Răng, Thành Phố Cần Thơ, Việt Nam",
+            "Khu vưc": "Thành Phố Cần Thơ",
+            "Miền2": "Miền Tây (ĐBSCL)",
+            "Mã kho2": 281,
+            "Số chứng từ": "281.123",
+            "Shipping method": "Xe khách hàng",
+            "Mã khách hàng": "KH-CT",
+            "Tên khách hàng": "NPP Cần Thơ",
+        }])
+        matrix = pd.DataFrame([{
+            "Khu vực/Tỉnh thành": "Cần Thơ",
+            "Kho hợp lý": "HCM, Long An, Cần Thơ, Đồng Nai",
+            "Mã kho": 53054281284,
+        }])
+        detail, _, _ = analyze_customer_pickups(transactions, matrix)
+        self.assertEqual(detail.iloc[0]["Đối chiếu Khu vực với địa chỉ"], "Khớp thành phần địa chỉ")
+        self.assertEqual(detail.iloc[0]["Miền2 theo workbook"], "Miền Tây (ĐBSCL)")
+
     def test_matrix_and_province_match(self):
         matrix = pd.DataFrame([{
             "Khu vực/Tỉnh thành": "Đắk Lắk",
