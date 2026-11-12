@@ -2266,10 +2266,21 @@ elif selected_analysis == "Đối chiếu kho":
         st.success("Không có giao dịch kho thiếu thông tin.")
     else:
         st.dataframe(warehouse_unknown[[
-            "_ten_kh", "_dia_chi", "_mien_goc", "_vung", "_chung_tu",
-            "_ma_kho", "_ten_kho", "_doi_chieu_kho", "_doi_chieu_kho_tong_hop",
+            "_ten_kh", "_dia_chi", "_mien_goc", "_khu_vuc_file", "_vung", "_chung_tu",
+            "_ma_kho", "_ten_kho", "_tinh_thanh_nhan_dien", "_don_vi_khop_ma_tran",
+            "_doi_chieu_dia_ban", "_doi_chieu_kho", "_doi_chieu_kho_tong_hop",
             "_kho_vung_file", "_ghi_chu_kho_file", "_ngay"
-        ]], use_container_width=True, hide_index=True)
+        ]].rename(columns={
+            "_ten_kh": "NPP", "_dia_chi": "Địa chỉ", "_mien_goc": "Miền2",
+            "_khu_vuc_file": "Khu vực theo workbook", "_vung": "Vùng kinh doanh",
+            "_chung_tu": "Chứng từ", "_ma_kho": "Mã kho từ chứng từ",
+            "_ten_kho": "Tên kho", "_tinh_thanh_nhan_dien": "Tỉnh/thành nhận diện",
+            "_don_vi_khop_ma_tran": "Địa bàn khớp ma trận",
+            "_doi_chieu_dia_ban": "Đối chiếu Khu vực với địa chỉ",
+            "_doi_chieu_kho": "Đối chiếu ma trận", "_doi_chieu_kho_tong_hop": "Kết quả tổng hợp",
+            "_kho_vung_file": "Kho vùng miền trong file", "_ghi_chu_kho_file": "Ghi chú gốc",
+            "_ngay": "Ngày"
+        }), use_container_width=True, hide_index=True)
     st.markdown("### :material/task_alt: Cách xử lý đề xuất")
     st.write(
         "1. Xác minh địa chỉ NPP và vùng địa lý thực tế. "
