@@ -328,7 +328,7 @@ def build_ai_findings(result: dict) -> pd.DataFrame:
         "Biểu tượng": "🔎",
         "Đầu mục đánh giá": "04 · NPP cần ưu tiên xác minh",
         "Mức ưu tiên": "Cao" if affected_customers else ("Theo dõi" if incomplete else "Thấp"),
-        "Kết quả": f"{affected_customers:,} NPP có ngoại lệ theo ma trận",
+        "Kết quả": f"{affected_customers:,} NPP có ngoại lệ hoặc cần xác minh thêm",
         "Nhận định tự động": "; ".join(top_lines) if top_lines else "Chưa ghi nhận NPP có ngoại lệ kho theo ma trận hiện tại.",
         "Căn cứ": "Số chứng từ ngoài danh mục, mâu thuẫn và dữ liệu chưa đủ theo từng NPP.",
         "Đề xuất kiểm soát": "Chọn mẫu theo NPP có số ngoại lệ lớn và tỷ lệ ngoại lệ cao; yêu cầu giải trình từng chứng từ, không chỉ giải trình tổng hợp.",
