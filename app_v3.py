@@ -2502,59 +2502,60 @@ elif selected_analysis == "Quản lý kiểm soát":
         data=control_data,
     )
 
-# ============================================================
-# EXPORT
-# ============================================================
+if selected_analysis == "Quản lý kiểm soát":
+    # ============================================================
+    # EXPORT
+    # ============================================================
 
-st.markdown("---")
-st.markdown('<div class="section-title">TẢI KẾT QUẢ PHÂN TÍCH</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown('<div class="section-title">TẢI KẾT QUẢ PHÂN TÍCH</div>', unsafe_allow_html=True)
 
-export_rows = filtered.copy()
-sensitive_value_columns = [
-    col for col in export_rows.columns
-    if any(token in norm(col) for token in [
-        "gia ban", "don gia", "gia von", "loi nhuan",
-        "bien loi nhuan", "profit", "unit price", "cost price"
-    ])
-]
-if sensitive_value_columns:
-    export_rows = export_rows.drop(columns=sensitive_value_columns, errors="ignore")
+    export_rows = filtered.copy()
+    sensitive_value_columns = [
+        col for col in export_rows.columns
+        if any(token in norm(col) for token in [
+            "gia ban", "don gia", "gia von", "loi nhuan",
+            "bien loi nhuan", "profit", "unit price", "cost price"
+        ])
+    ]
+    if sensitive_value_columns:
+        export_rows = export_rows.drop(columns=sensitive_value_columns, errors="ignore")
 
-export_sheets = {
-    "Tong_hop_rui_ro": risk_summary,
-    "Doanh_thu_mat_hang": product_summary,
-    "Theo_thang": monthly_sales,
-    "Bien_dong_NPP_theo_thang": customer_monthly_review,
-    "Cap_NPP_dich_chuyen_mat_hang": product_shift_review,
-    "Thang_bien_dong_dot_ngot": monthly_anomalies,
-    "Bang_panel_NPP_thang": monthly_panel,
-    "Kho_can_xac_minh": warehouse_evidence,
-    "Kho_HS_Home_can_xac_minh": warehouse_special,
-    "Kho_chua_du_du_lieu": warehouse_unknown,
-    "Xe_cung_ngay": vehicle_day_shared,
-    "Xe_nhieu_ngay": vehicle_period_shared,
-    "Dia_chi_trung": address_shared,
-    "Chua_nhan_dien": unrecognized,
-    "Du_lieu_da_loc": export_rows,
-    "Nhat_ky_dong_bi_loai": scope_excluded,
-    "AI_Danh_gia_theo_tru_cot": ai_assessment,
-}
-try:
-    excel_bytes = build_excel_export(export_sheets)
-    st.download_button(
-        "TẢI BÁO CÁO KIỂM SOÁT NPP (EXCEL)",
-        data=excel_bytes,
-        file_name="NPP_Business_Risk_Analysis.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
+    export_sheets = {
+        "Tong_hop_rui_ro": risk_summary,
+        "Doanh_thu_mat_hang": product_summary,
+        "Theo_thang": monthly_sales,
+        "Bien_dong_NPP_theo_thang": customer_monthly_review,
+        "Cap_NPP_dich_chuyen_mat_hang": product_shift_review,
+        "Thang_bien_dong_dot_ngot": monthly_anomalies,
+        "Bang_panel_NPP_thang": monthly_panel,
+        "Kho_can_xac_minh": warehouse_evidence,
+        "Kho_HS_Home_can_xac_minh": warehouse_special,
+        "Kho_chua_du_du_lieu": warehouse_unknown,
+        "Xe_cung_ngay": vehicle_day_shared,
+        "Xe_nhieu_ngay": vehicle_period_shared,
+        "Dia_chi_trung": address_shared,
+        "Chua_nhan_dien": unrecognized,
+        "Du_lieu_da_loc": export_rows,
+        "Nhat_ky_dong_bi_loai": scope_excluded,
+        "AI_Danh_gia_theo_tru_cot": ai_assessment,
+    }
+    try:
+        excel_bytes = build_excel_export(export_sheets)
+        st.download_button(
+            "TẢI BÁO CÁO KIỂM SOÁT NPP (EXCEL)",
+            data=excel_bytes,
+            file_name="NPP_Business_Risk_Analysis.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+    except Exception as exc:
+        st.error(f"Không tạo được file Excel xuất kết quả: {exc}")
+
+    st.caption(
+        "Phạm vi phân tích đã loại chứng từ PN và chỉ giữ bốn loại đơn hàng được phê duyệt. "
+        "Nhật ký dòng bị loại được xuất riêng để phục vụ truy vết. "
+        "Lưu ý: hệ thống sàng lọc dấu hiệu dựa trên dữ liệu được cung cấp. "
+        "Cần đối chiếu chứng từ, xác minh thực tế và lấy giải trình trước khi kết luận. "
+        "Các bản ghi chưa nhận diện được tách riêng, không mặc định là rủi ro thấp."
     )
-except Exception as exc:
-    st.error(f"Không tạo được file Excel xuất kết quả: {exc}")
-
-st.caption(
-    "Phạm vi phân tích đã loại chứng từ PN và chỉ giữ bốn loại đơn hàng được phê duyệt. "
-    "Nhật ký dòng bị loại được xuất riêng để phục vụ truy vết. "
-    "Lưu ý: hệ thống sàng lọc dấu hiệu dựa trên dữ liệu được cung cấp. "
-    "Cần đối chiếu chứng từ, xác minh thực tế và lấy giải trình trước khi kết luận. "
-    "Các bản ghi chưa nhận diện được tách riêng, không mặc định là rủi ro thấp."
-)
