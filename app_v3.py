@@ -1853,6 +1853,77 @@ if unknown_count:
         f"Có {period_unknown_count} dòng trong kỳ chưa nhận diện và {undated_count} dòng không có ngày chứng từ trong toàn bộ dữ liệu; cần bổ sung trước khi kết luận."
     ))
 
+# Structured, explainable AI-style assessment: each judgement is tied to a measurable rule.
+ai_assessment_rows = []
+
+if revenue_change is None:
+    revenue_status, revenue_priority = "Chưa đủ kỳ so sánh", "Chưa đủ dữ liệu"
+    revenue_evidence = "Không có doanh thu kỳ trước để tính tỷ lệ."
+elif revenue_change <= -30:
+    revenue_status, revenue_priority = "Doanh thu giảm mạnh", "Cao"
+    revenue_evidence = f"Giảm {revenue_change:.1f}% so với kỳ trước."
+elif revenue_change >= 50:
+    revenue_status, revenue_priority = "Doanh thu tăng đột biến", "Theo dõi"
+    revenue_evidence = f"Tăng {revenue_change:.1f}% so với kỳ trước."
+else:
+    revenue_status, revenue_priority = "Biến động trong ngưỡng cảnh báo hiện tại", "Thấp"
+    revenue_evidence = f"Biến động {revenue_change:+.1f}% so với kỳ trước."
+ai_assessment_rows.append({
+    "Hạng mục": "Doanh thu",
+    "Kết quả sàng lọc": revenue_status,
+    "Căn cứ số liệu": revenue_evidence,
+    "Nhận định tự động": "Biến động doanh thu cần được giải thích bằng số lượng đơn, NPP đóng góp lớn, lịch sử mua và chương trình kinh doanh.",
+    "Việc cần xác minh": "Đối chiếu đơn hàng, phê duyệt bán hàng, lịch sử mua của NPP, công nợ và tồn kho.",
+    "Mức ưu tiên": revenue_priority,
+})
+
+quantity_status = (
+    "Biến động sản lượng lớn" if quantity_change is not None and abs(quantity_change) >= 30
+    else "Chưa vượt ngưỡng biến động 30%" if quantity_change is not None
+    else "Chưa đủ kỳ so sánh"
+)
+ai_assessment_rows.append({
+    "Hạng mục": "Sản lượng và mặt hàng",
+    "Kết quả sàng lọc": quantity_status,
+    "Căn cứ số liệu": f"Biến động sản lượng: {quantity_change:+.1f}%." if quantity_change is not None else "Không có dữ liệu kỳ trước.",
+    "Nhận định tự động": f"Có {len(product_shift_review)} cặp NPP có dấu hiệu dịch chuyển sản lượng trái chiều theo vùng/mã hàng.",
+    "Việc cần xác minh": "Kiểm tra cơ cấu mặt hàng, khách hàng cuối, địa bàn phân phối và chứng từ điều chuyển.",
+    "Mức ưu tiên": "Cao" if not product_shift_review.empty else ("Theo dõi" if quantity_change is not None and abs(quantity_change) >= 30 else "Thấp"),
+})
+ai_assessment_rows.append({
+    "Hạng mục": "Hoạt động NPP",
+    "Kết quả sàng lọc": f"{inactive_npp_count} NPP ngừng mua; {new_npp_count} NPP mới phát sinh",
+    "Căn cứ số liệu": "So sánh danh sách NPP có giao dịch giữa kỳ hiện tại và kỳ liền trước.",
+    "Nhận định tự động": "NPP ngừng mua hoặc mới phát sinh cần được đánh giá theo hồ sơ, hạn mức, công nợ và tính liên tục của hoạt động.",
+    "Việc cần xác minh": "Kiểm tra hồ sơ mở mới, thay đổi chủ sở hữu/địa chỉ, công nợ và lịch sử giao dịch.",
+    "Mức ưu tiên": "Theo dõi" if inactive_npp_count or new_npp_count else "Thấp",
+})
+ai_assessment_rows.append({
+    "Hạng mục": "Kho lấy hàng",
+    "Kết quả sàng lọc": f"{warehouse_bad_events} sự kiện cần xác minh; tỷ lệ phù hợp trực tiếp {warehouse_fit_pct:.1f}%." if warehouse_comparable else f"{warehouse_unknown_events + warehouse_special_events} sự kiện chưa đủ căn cứ/đặc biệt.",
+    "Căn cứ số liệu": "Chỉ xét giao dịch Xe khách hàng; đối chiếu mã kho với vùng địa chỉ và thông tin kho trong workbook.",
+    "Nhận định tự động": "Kho ngoài ma trận hoặc mâu thuẫn ghi chú là tín hiệu cần xác minh, không tự động kết luận sai phạm.",
+    "Việc cần xác minh": "Đối chiếu phiếu xuất kho, địa chỉ thực tế, điều phối, tồn kho tại thời điểm xuất và phê duyệt ngoại lệ.",
+    "Mức ưu tiên": "Cao" if warehouse_bad_events >= 5 else ("Theo dõi" if warehouse_bad_events or warehouse_unknown_events else "Thấp"),
+})
+ai_assessment_rows.append({
+    "Hạng mục": "Phương tiện xe khách hàng",
+    "Kết quả sàng lọc": f"{len(vehicle_day_shared)} trường hợp dùng chung cùng ngày; {len(vehicle_period_shared)} trường hợp dùng chung nhiều ngày.",
+    "Căn cứ số liệu": "Đối chiếu biển số chuẩn hóa, NPP, ngày hoạt động và số chứng từ.",
+    "Nhận định tự động": "Xe dùng chung có thể hợp lý nếu cùng chủ xe/đơn vị vận tải, nhưng cần kiểm tra khả năng phục vụ thực tế và mối liên hệ giữa các NPP.",
+    "Việc cần xác minh": "Kiểm tra giờ xuất hàng, lịch trình xe, chủ phương tiện, người nhận hàng và quan hệ giữa các NPP.",
+    "Mức ưu tiên": "Cao" if len(vehicle_day_shared) >= 5 else ("Theo dõi" if len(vehicle_day_shared) or len(vehicle_period_shared) else "Thấp"),
+})
+ai_assessment_rows.append({
+    "Hạng mục": "Chất lượng dữ liệu",
+    "Kết quả sàng lọc": f"{period_unknown_count} dòng chưa nhận diện trong kỳ; {undated_count} dòng thiếu ngày.",
+    "Căn cứ số liệu": f"Tỷ lệ dữ liệu đạt kiểm tra hiện tại: {data_quality_pct:.1f}%.",
+    "Nhận định tự động": "Dữ liệu thiếu hoặc không nhận diện làm giảm độ tin cậy của kết quả phân tích.",
+    "Việc cần xác minh": "Bổ sung ngày, địa chỉ, loại đơn hàng, số chứng từ, hình thức vận chuyển và biển số xe.",
+    "Mức ưu tiên": "Cao" if data_quality_pct < 90 else ("Theo dõi" if unknown_count else "Thấp"),
+})
+ai_assessment = pd.DataFrame(ai_assessment_rows)
+
 tab_overview, tab_sales, tab_monthly, tab_warehouse, tab_vehicle, tab_risk, tab_control, tab_unknown = st.tabs([
     "1. Tổng quan", "2. Doanh thu & mặt hàng", "3. Biến động theo tháng",
     "4. Kho lấy hàng", "5. Xe khách hàng", "6. Đánh giá rủi ro",
@@ -1975,6 +2046,14 @@ with tab_overview:
             f"Dòng cần bổ sung/không nhận diện trong kỳ: {period_unknown_count}; "
             f"dòng thiếu ngày chứng từ trong toàn bộ dữ liệu: {undated_count}."
         )
+
+    st.markdown("### Đánh giá tự động theo từng trụ cột")
+    st.caption(
+        "Hệ thống sử dụng quy tắc định lượng, ngưỡng cảnh báo và bằng chứng trong workbook "
+        "để tạo nhận định, căn cứ, việc cần xác minh và mức ưu tiên. Đây là AI hỗ trợ sàng lọc có thể giải thích; "
+        "không thay thế xác minh của kiểm soát viên."
+    )
+    st.dataframe(ai_assessment, use_container_width=True, hide_index=True)
 
     st.markdown("### Nhận xét tự động")
     if not auto_comments:
@@ -2569,6 +2648,7 @@ export_sheets = {
     "Chua_nhan_dien": unrecognized,
     "Du_lieu_da_loc": export_rows,
     "Nhat_ky_dong_bi_loai": scope_excluded,
+    "AI_Danh_gia_theo_tru_cot": ai_assessment,
 }
 try:
     excel_bytes = build_excel_export(export_sheets)
