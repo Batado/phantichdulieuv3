@@ -171,6 +171,8 @@ def analyze_customer_pickups(
     date_col: str = "Ngày chứng từ",
     order_type_col: str = "Loại đơn hàng",
     note_col: str = "Ghi chú2",
+    region_col: str = "Miền2",
+    locality_col: str = "Khu vưc",
     revenue_col: str = "Thành tiền bán",
     quantity_col: str = "Số lượng",
     weight_col: str = "Khối lượng",
@@ -193,6 +195,24 @@ def analyze_customer_pickups(
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     source["_address"] = source[address_col].map(clean)
+    source["_source_region"] = source[region_col].map(clean) if region_col in source.columns else ""
+    source["_source_locality"] = source[locality_col].map(clean) if locality_col in source.columns else ""
+
+    def locality_matches_address(row) -> str:
+        locality = norm(row["_source_locality"])
+        if not locality:
+            return "Thiếu Khu vực"
+        parts = _address_parts(row["_address"])
+        normalized_parts = []
+        for part in parts:
+            for prefix in ("tinh ", "thanh pho ", "tp "):
+                if part.startswith(prefix):
+                    part = part[len(prefix):].strip()
+                    break
+            normalized_parts.append(part)
+        return "Khớp thành phần địa chỉ" if locality in normalized_parts else "Không khớp thành phần địa chỉ - cần xác minh"
+
+    source["_locality_address_check"] = source.apply(locality_matches_address, axis=1)
     resolved_locations = source["_address"].map(lambda x: resolve_matrix_location(x, matrix_keys))
     source["_province"] = resolved_locations.map(lambda item: item[0])
     source["_matrix_key"] = resolved_locations.map(lambda item: item[1])
@@ -287,6 +307,9 @@ def analyze_customer_pickups(
     output["Tên khách hàng"] = source["_customer_name"]
     output["Địa chỉ khách hàng"] = source["_address"]
     output["Tỉnh/thành nhận diện"] = source["_province"]
+    output["Miền2 theo workbook"] = source["_source_region"]
+    output["Khu vực theo workbook"] = source["_source_locality"]
+    output["Đối chiếu Khu vực với địa chỉ"] = source["_locality_address_check"]
     output["Đơn vị khớp ma trận"] = source["_matrix_key"]
     output["Cấp độ khớp ma trận"] = source["_matrix_match_level"]
     output["Hình thức lấy hàng"] = source[method_col].map(clean)
@@ -350,7 +373,7 @@ def analyze_customer_pickups(
         default="Chưa thấy lệch theo ma trận",
     )
     province_summary = (
-        detail.groupby(["Tỉnh/thành nhận diện", "Tên kho thực tế", "Kết quả đối chiếu"], dropna=False)
+        detail.groupby(["Tỉnh/thành nhận diện", "Miền2 theo workbook", "Tên kho thực tế", "Kết quả đối chiếu"], dropna=False)
         .size().reset_index(name="Số chứng từ")
     )
     return detail, customer_summary, province_summary
