@@ -65,9 +65,30 @@ def parse_code_sequence(value: Any) -> set[str]:
     return {digits[i:i + 3] for i in range(0, len(digits), 3)}
 
 
-def classify_customer_vehicle(value: Any) -> bool:
+def classify_vehicle_type(value: Any) -> str:
+    """Map common ERP labels to the three separate pickup modes."""
     text = norm(value)
-    return "xe khach hang" in text or text in {"xe khach", "khach hang"}
+    if not text:
+        return "Chưa xác định"
+    if any(token in text for token in (
+        "xe nha may thue ngoai", "nha may thue ngoai", "xe thue ngoai",
+        "thue ngoai", "outsourced", "external carrier",
+    )):
+        return "Xe nhà máy thuê ngoài"
+    if any(token in text for token in (
+        "xe nha may", "nha may", "xe cong ty", "xe hs", "factory",
+    )):
+        return "Xe nhà máy"
+    if any(token in text for token in (
+        "xe khach hang", "xe kh", "khach hang tu lay", "khach tu lay",
+        "khach hang den lay", "npp tu lay", "customer vehicle",
+    )):
+        return "Xe khách hàng"
+    return "Chưa xác định"
+
+
+def classify_customer_vehicle(value: Any) -> bool:
+    return classify_vehicle_type(value) == "Xe khách hàng"
 
 
 def extract_province(address: Any, matrix_keys: set[str]) -> str:
@@ -147,12 +168,20 @@ def analyze_customer_pickups(
 
     source["_address"] = source[address_col].map(clean)
     source["_province"] = source["_address"].map(lambda x: extract_province(x, matrix_keys))
-    source["_actual_code"] = source[warehouse_code_col].map(normalize_code)
-    missing_code = source["_actual_code"].eq("")
+    # Business rule: the actual warehouse code is the first three digits of
+    # the document number (e.g. 263.18067094 -> 263). The separate warehouse
+    # column is retained as a cross-check, not used to override the document.
     document_codes = source[document_col].fillna("").astype(str).str.extract(
         r"^\s*(\d{3})(?=\.|/|-|\s|$)", expand=False
     ).fillna("")
-    source.loc[missing_code, "_actual_code"] = document_codes.loc[missing_code]
+    source["_column_code"] = source[warehouse_code_col].map(normalize_code)
+    source["_actual_code"] = document_codes.where(
+        document_codes.ne(""), source["_column_code"]
+    )
+    source["_document_code_conflict"] = (
+        document_codes.ne("") & source["_column_code"].ne("")
+        & document_codes.ne(source["_column_code"])
+    )
 
     source["_allowed_codes"] = source["_province"].map(
         lambda p: ", ".join(sorted(matrix.get(p, set())))
@@ -178,6 +207,9 @@ def analyze_customer_pickups(
         default="Ngoài danh mục kho hợp lý",
     )
     source["_status"] = statuses
+    source.loc[source["_document_code_conflict"], "_status"] = (
+        "Mâu thuẫn: mã kho trích từ chứng từ khác cột mã kho"
+    )
 
     if note_col in source.columns:
         notes = source[note_col].map(clean)
@@ -223,6 +255,7 @@ def analyze_customer_pickups(
     output["Hình thức lấy hàng"] = source[method_col].map(clean)
     output["Biển số xe"] = source[plate_col].map(clean) if plate_col in source.columns else ""
     output["Mã kho thực tế"] = source["_actual_code"]
+    output["Mã kho tại cột dữ liệu"] = source["_column_code"]
     output["Tên kho thực tế"] = source[warehouse_name_col].map(clean) if warehouse_name_col in source.columns else ""
     output["Mã kho được phép"] = source["_allowed_codes"]
     output["Kết quả đối chiếu"] = source["_status"]
@@ -231,21 +264,24 @@ def analyze_customer_pickups(
     output["Số lượng"] = pd.to_numeric(source[quantity_col], errors="coerce") if quantity_col in source.columns else np.nan
     output["Khối lượng"] = pd.to_numeric(source[weight_col], errors="coerce") if weight_col in source.columns else np.nan
 
-    # Consolidate item rows to a single customer/document event.
-    event_records = []
-    for event_key, group in output.groupby("_event_key", sort=False, dropna=False):
-        first = group.iloc[0].to_dict()
-        first["_event_key"] = event_key
-        first["Số dòng hàng"] = len(group)
-        statuses_in_event = set(group["Kết quả đối chiếu"].dropna().astype(str))
-        if len(statuses_in_event) > 1:
-            first["Kết quả đối chiếu"] = "Mâu thuẫn dữ liệu giữa các dòng cùng chứng từ"
-        first["Doanh thu"] = group["Doanh thu"].sum(min_count=1)
-        first["Số lượng"] = group["Số lượng"].sum(min_count=1)
-        first["Khối lượng"] = group["Khối lượng"].sum(min_count=1)
-        first["Ghi chú gốc"] = " | ".join(sorted(set(x for x in group["Ghi chú gốc"].astype(str) if x.strip())))
-        event_records.append(first)
-    detail = pd.DataFrame(event_records)
+    # Consolidate item rows to one customer/document event using groupby
+    # reductions rather than a Python loop over every invoice.
+    grouped = output.groupby("_event_key", sort=False, dropna=False)
+    detail = grouped.first()
+    detail["Số dòng hàng"] = grouped.size()
+    for metric in ("Doanh thu", "Số lượng", "Khối lượng"):
+        detail[metric] = grouped[metric].sum(min_count=1)
+    detail["Ghi chú gốc"] = grouped["Ghi chú gốc"].agg(
+        lambda values: " | ".join(sorted(set(x for x in values.astype(str) if x.strip())))
+    )
+    status_count = grouped["Kết quả đối chiếu"].nunique(dropna=True)
+    code_count = grouped["Mã kho thực tế"].nunique(dropna=True)
+    province_count = grouped["Tỉnh/thành nhận diện"].nunique(dropna=True)
+    has_internal_conflict = status_count.gt(1) | code_count.gt(1) | province_count.gt(1)
+    detail.loc[has_internal_conflict, "Kết quả đối chiếu"] = (
+        "Mâu thuẫn dữ liệu giữa các dòng cùng chứng từ"
+    )
+    detail = detail.reset_index(drop=True)
     if detail.empty:
         return detail, pd.DataFrame(), pd.DataFrame()
 
@@ -254,6 +290,7 @@ def analyze_customer_pickups(
         "Mâu thuẫn: ma trận ngoài danh mục nhưng Ghi chú2 ghi Hợp lý",
         "Mâu thuẫn: ma trận phù hợp nhưng Ghi chú2 ghi Không hợp lý",
         "Mâu thuẫn dữ liệu giữa các dòng cùng chứng từ",
+        "Mâu thuẫn: mã kho trích từ chứng từ khác cột mã kho",
     }
     incomplete_prefixes = ("Chưa", "Thiếu", "Mã kho")
 
