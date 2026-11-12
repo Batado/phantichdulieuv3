@@ -344,7 +344,12 @@ def analyze_customer_pickups(
     detail.loc[has_internal_conflict, "Kết quả đối chiếu"] = (
         "Mâu thuẫn dữ liệu giữa các dòng cùng chứng từ"
     )
-    detail = detail.reset_index(drop=True)
+    # Keep the event key as a real column: the dashboard joins this result
+    # back to the transaction frame by customer + document. Dropping the
+    # groupby index here caused a KeyError in prepare_transaction_frame().
+    detail = detail.reset_index()
+    if "_event_key" not in detail.columns:
+        detail["_event_key"] = pd.Series(dtype=str)
     if detail.empty:
         return detail, pd.DataFrame(), pd.DataFrame()
 
