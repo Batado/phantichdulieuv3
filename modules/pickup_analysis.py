@@ -163,7 +163,7 @@ def analyze_customer_pickups(
             Số_chứng_từ=("Số chứng từ", "nunique"),
             Số_phù_hợp=("Kết quả đối chiếu", lambda s: (s == "Phù hợp danh mục kho").sum()),
             Số_ngoài_danh_mục=("Kết quả đối chiếu", lambda s: (s == "Ngoài danh mục kho hợp lý").sum()),
-            Số_chưa_đủ_dữ_liệu=("Kết quả đối chiếu", lambda s: s.str.startswith(("Chưa", "Thiếu")).sum()),
+            Số_chưa_đủ_dữ_liệu=("Kết quả đối chiếu", lambda s: s.str.startswith(("Chưa", "Thiếu", "Mã kho")).sum()),
             Số_biển_số=("Biển số xe", lambda s: s.replace("", pd.NA).nunique()),
         )
         .reset_index()
