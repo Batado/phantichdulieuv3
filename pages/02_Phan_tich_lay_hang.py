@@ -40,7 +40,7 @@ if detail.empty:
 
 total = len(detail)
 matched = int((detail["Kết quả đối chiếu"] == "Phù hợp danh mục kho").sum())
-outside = int((detail["Kết quả đối chiếu"] == "Ngoài danh mục kho hợp lý").sum())
+outside = int(detail["Kết quả đối chiếu"].str.startswith(("Ngoài", "Mâu thuẫn")).sum())
 unknown = total - matched - outside
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Giao dịch xe khách hàng", f"{total:,}")
