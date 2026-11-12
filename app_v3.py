@@ -837,13 +837,12 @@ if valid_dates.empty:
     st.warning("Không có ngày chứng từ hợp lệ. Hệ thống chỉ có thể hiển thị dữ liệu chưa nhận diện.")
     st.stop()
 
-st.markdown('<div class="section-title">KỲ BÁO CÁO</div>', unsafe_allow_html=True)
-period_col, value_col, previous_col, next_col = st.columns([1.1, 2.2, 0.7, 0.7])
-with period_col:
-    report_period_type = st.radio(
-        "Chu kỳ",
+with st.sidebar:
+    st.divider()
+    st.markdown("### :material/calendar_month: KỲ BÁO CÁO")
+    report_period_type = st.selectbox(
+        "Chu kỳ phân tích",
         ["Tuần", "Tháng", "Năm"],
-        horizontal=True,
         key="business_report_period_type",
     )
 
@@ -859,14 +858,14 @@ if period_select_key not in st.session_state or st.session_state[period_select_k
     st.session_state[period_select_key] = period_values[-1]
 
 current_idx = period_values.index(st.session_state[period_select_key])
-with previous_col:
-    if st.button("◀ Kỳ trước", use_container_width=True, disabled=current_idx == 0):
-        st.session_state[period_select_key] = period_values[current_idx - 1]
-with next_col:
-    if st.button("Kỳ sau ▶", use_container_width=True, disabled=current_idx >= len(period_values) - 1):
-        st.session_state[period_select_key] = period_values[current_idx + 1]
-
-with value_col:
+with st.sidebar:
+    prev_col, next_col = st.columns(2)
+    with prev_col:
+        if st.button("← Kỳ trước", use_container_width=True, disabled=current_idx == 0):
+            st.session_state[period_select_key] = period_values[current_idx - 1]
+    with next_col:
+        if st.button("Kỳ sau →", use_container_width=True, disabled=current_idx >= len(period_values) - 1):
+            st.session_state[period_select_key] = period_values[current_idx + 1]
     selected_period_value = st.selectbox(
         "Kỳ đang đánh giá",
         period_values,
