@@ -338,50 +338,37 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-def _sync_business_navigation(widget_key):
-    st.session_state["business_analysis_nav"] = st.session_state.get(widget_key, "Tổng quan")
+def _business_nav_button(label, value, key):
+    active = st.session_state.get("business_analysis_nav", "Tổng quan") == value
+    if st.button(
+        label,
+        key=key,
+        type="primary" if active else "secondary",
+        use_container_width=True,
+    ):
+        st.session_state["business_analysis_nav"] = value
 
 
 with st.sidebar:
+    if "business_analysis_nav" not in st.session_state:
+        st.session_state["business_analysis_nav"] = "Tổng quan"
     st.markdown("## ◈ BUSINESS CONTROL")
     st.caption("WORKSPACE / PHÂN TÍCH KINH DOANH")
+
     st.markdown("#### TỔNG QUAN")
-    if st.button("⌂  Tổng quan", key="nav_overview_button", use_container_width=True):
-        st.session_state["business_analysis_nav"] = "Tổng quan"
+    _business_nav_button("⌂  Tổng quan", "Tổng quan", "nav_overview_button")
 
     st.markdown("#### PHÂN TÍCH")
-    analysis_labels = {
-        "Doanh thu & mặt hàng": "▥  Doanh thu & mặt hàng",
-        "Biến động theo tháng": "↗  Biến động theo tháng",
-        "Đối chiếu kho": "▦  Đối chiếu kho",
-        "Xe khách hàng": "▰  Xe khách hàng",
-        "Phân tích kho lấy hàng": "▣  Kho lấy hàng",
-    }
-    st.radio(
-        "PHÂN TÍCH NGHIỆP VỤ",
-        list(analysis_labels),
-        format_func=lambda value: analysis_labels[value],
-        key="business_analysis_group",
-        on_change=_sync_business_navigation,
-        args=("business_analysis_group",),
-        label_visibility="collapsed",
-    )
+    _business_nav_button("▥  Doanh thu & mặt hàng", "Doanh thu & mặt hàng", "nav_sales_button")
+    _business_nav_button("↗  Biến động theo tháng", "Biến động theo tháng", "nav_monthly_button")
+    _business_nav_button("▦  Đối chiếu kho", "Đối chiếu kho", "nav_warehouse_button")
+    _business_nav_button("▰  Xe khách hàng", "Xe khách hàng", "nav_customer_vehicle_button")
+    _business_nav_button("▣  Phân tích kho lấy hàng", "Phân tích kho lấy hàng", "nav_pickup_button")
 
     st.markdown("#### KIỂM SOÁT")
-    control_labels = {
-        "Đánh giá rủi ro": "◈  Đánh giá rủi ro",
-        "Quản lý kiểm soát": "▤  Quản lý kiểm soát",
-        "Chưa nhận diện": "⌕  Chưa nhận diện",
-    }
-    st.radio(
-        "KIỂM SOÁT",
-        list(control_labels),
-        format_func=lambda value: control_labels[value],
-        key="business_control_group",
-        on_change=_sync_business_navigation,
-        args=("business_control_group",),
-        label_visibility="collapsed",
-    )
+    _business_nav_button("◈  Đánh giá rủi ro", "Đánh giá rủi ro", "nav_risk_button")
+    _business_nav_button("▤  Quản lý kiểm soát", "Quản lý kiểm soát", "nav_control_button")
+    _business_nav_button("⌕  Chưa nhận diện", "Chưa nhận diện", "nav_unknown_button")
 
     selected_analysis = st.session_state.get("business_analysis_nav", "Tổng quan")
     if selected_analysis == "Phân tích kho lấy hàng":
