@@ -7,6 +7,7 @@ from modules.pickup_analysis import (
     build_warehouse_matrix,
     extract_province,
     parse_code_sequence,
+    classify_vehicle_type,
 )
 
 
@@ -16,6 +17,36 @@ class PickupAnalysisTests(unittest.TestCase):
             parse_code_sequence(53054281284),
             {"053", "054", "281", "284"},
         )
+
+
+    def test_vehicle_types_are_separated(self):
+        self.assertEqual(classify_vehicle_type("Xe khách hàng"), "Xe khách hàng")
+        self.assertEqual(classify_vehicle_type("Khách hàng tự lấy"), "Xe khách hàng")
+        self.assertEqual(classify_vehicle_type("Xe nhà máy"), "Xe nhà máy")
+        self.assertEqual(classify_vehicle_type("Xe nhà máy thuê ngoài"), "Xe nhà máy thuê ngoài")
+
+    def test_document_prefix_is_primary_warehouse_code_and_column_mismatch_is_flagged(self):
+        transactions = pd.DataFrame([{
+            "Địa chỉ": "Số 1, Tỉnh Đắk Lắk, Việt Nam",
+            "Mã kho2": 251,
+            "Số chứng từ": "284.123",
+            "Shipping method": "Xe khách hàng",
+            "Kho lấy hàng": "TK PT",
+            "Số xe": "47H-12345",
+            "Mã khách hàng": "KH10",
+            "Tên khách hàng": "NPP D",
+            "Ngày chứng từ": "2026-10-01",
+        }])
+        matrix = pd.DataFrame([{
+            "Khu vực/Tỉnh thành": "Đắk Lắk",
+            "Kho hợp lý": "Tây Nguyên",
+            "Mã kho": 251252263,
+        }])
+        detail, summary, _ = analyze_customer_pickups(transactions, matrix)
+        self.assertEqual(detail.iloc[0]["Mã kho thực tế"], "284")
+        self.assertEqual(detail.iloc[0]["Mã kho tại cột dữ liệu"], "251")
+        self.assertTrue(detail.iloc[0]["Kết quả đối chiếu"].startswith("Mâu thuẫn"))
+        self.assertEqual(summary.iloc[0]["Số_ngoài_danh_mục"], 1)
 
     def test_matrix_and_province_match(self):
         matrix = pd.DataFrame([{
