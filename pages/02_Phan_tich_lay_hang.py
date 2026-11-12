@@ -415,27 +415,39 @@ def build_ai_findings(result: dict) -> pd.DataFrame:
     return pd.DataFrame(findings)
 
 
+def _pickup_nav_button(label, value, key):
+    active = st.session_state.get("pickup_section_nav", "AI đánh giá") == value
+    if st.button(
+        label,
+        key=key,
+        type="primary" if active else "secondary",
+        use_container_width=True,
+    ):
+        st.session_state["pickup_section_nav"] = value
+
+
 with st.sidebar:
+    if "pickup_section_nav" not in st.session_state:
+        st.session_state["pickup_section_nav"] = "AI đánh giá"
     st.markdown("## ◈ BUSINESS CONTROL")
     st.caption("PHÂN TÍCH KHO LẤY HÀNG")
     st.page_link("app_v3.py", label="⌂  Tổng quan kinh doanh", use_container_width=True)
-    st.markdown("#### ĐIỀU HƯỚNG")
-    pickup_menu = {
-        "AI đánh giá": "◈  AI đánh giá",
-        "NPP cần xác minh": "⌕  NPP cần xác minh",
-        "Đối chiếu kho": "▦  Đối chiếu kho",
-        "Xe khách hàng": "▰  Xe khách hàng",
-        "Xe nhà máy": "▣  Xe nhà máy",
-        "Xe nhà máy thuê ngoài": "⇢  Xe nhà máy thuê ngoài",
-        "Nhật ký dữ liệu": "▤  Nhật ký dữ liệu",
-    }
-    pickup_section = st.radio(
-        "ĐIỀU HƯỚNG",
-        list(pickup_menu),
-        format_func=lambda value: pickup_menu[value],
-        key="pickup_section_nav",
-        label_visibility="collapsed",
-    )
+
+    st.markdown("#### TỔNG QUAN")
+    _pickup_nav_button("◈  AI đánh giá", "AI đánh giá", "pickup_ai_nav")
+
+    st.markdown("#### PHÂN TÍCH")
+    _pickup_nav_button("⌕  NPP cần xác minh", "NPP cần xác minh", "pickup_npp_nav")
+    _pickup_nav_button("▦  Đối chiếu kho", "Đối chiếu kho", "pickup_warehouse_nav")
+
+    st.markdown("#### PHƯƠNG TIỆN")
+    _pickup_nav_button("▰  Xe khách hàng", "Xe khách hàng", "pickup_customer_vehicle_nav")
+    _pickup_nav_button("▣  Xe nhà máy", "Xe nhà máy", "pickup_factory_vehicle_nav")
+    _pickup_nav_button("⇢  Xe nhà máy thuê ngoài", "Xe nhà máy thuê ngoài", "pickup_outsourced_vehicle_nav")
+
+    st.markdown("#### DỮ LIỆU")
+    _pickup_nav_button("▤  Nhật ký dữ liệu", "Nhật ký dữ liệu", "pickup_logs_nav")
+    pickup_section = st.session_state.get("pickup_section_nav", "AI đánh giá")
     st.divider()
     st.markdown("### :material/database: DỮ LIỆU")
     uploaded = st.file_uploader(
