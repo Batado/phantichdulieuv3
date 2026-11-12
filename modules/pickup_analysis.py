@@ -198,25 +198,24 @@ def analyze_customer_pickups(
     source["_source_region"] = source[region_col].map(clean) if region_col in source.columns else ""
     source["_source_locality"] = source[locality_col].map(clean) if locality_col in source.columns else ""
 
-    def locality_matches_address(row) -> str:
-        locality = norm(row["_source_locality"])
-        if not locality:
-            return "Thiếu Khu vực"
+    def strip_admin_prefix(value: Any) -> str:
+        value = norm(value)
         for prefix in ("tinh ", "thanh pho ", "tp "):
-            if locality.startswith(prefix):
-                locality = locality[len(prefix):].strip()
-                break
-        parts = _address_parts(row["_address"])
-        normalized_parts = []
-        for part in parts:
-            for prefix in ("tinh ", "thanh pho ", "tp "):
-                if part.startswith(prefix):
-                    part = part[len(prefix):].strip()
-                    break
-            normalized_parts.append(part)
-        return "Khớp thành phần địa chỉ" if locality in normalized_parts else "Không khớp thành phần địa chỉ - cần xác minh"
+            if value.startswith(prefix):
+                return value[len(prefix):].strip()
+        return value
 
-    source["_locality_address_check"] = source.apply(locality_matches_address, axis=1)
+    locality_values = source["_source_locality"].map(strip_admin_prefix)
+    address_segment_sets = source["_address"].map(
+        lambda address: {strip_admin_prefix(part) for part in _address_parts(address)}
+    )
+    source["_locality_address_check"] = [
+        "Thiếu Khu vực" if not locality else (
+            "Khớp thành phần địa chỉ" if locality in address_parts
+            else "Không khớp thành phần địa chỉ - cần xác minh"
+        )
+        for locality, address_parts in zip(locality_values, address_segment_sets)
+    ]
     resolved_locations = source["_address"].map(lambda x: resolve_matrix_location(x, matrix_keys))
     source["_province"] = resolved_locations.map(lambda item: item[0])
     source["_matrix_key"] = resolved_locations.map(lambda item: item[1])
