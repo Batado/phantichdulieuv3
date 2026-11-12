@@ -77,6 +77,15 @@ class CurrentMainRegionalAuditTests(unittest.TestCase):
         self.assertTrue(detail.empty)
         self.assertTrue(customer_summary.empty)
         self.assertTrue(province_summary.empty)
+        # Empty results must retain the schema expected by dashboard joins,
+        # including older deployments that call set_index directly.
+        self.assertIn("_event_key", detail.columns)
+        self.assertIn("Kết quả đối chiếu", detail.columns)
+        self.assertIn("Mã kho được phép", detail.columns)
+        self.assertEqual(
+            detail.set_index("_event_key")["Kết quả đối chiếu"].empty,
+            True,
+        )
 
     def test_empty_input_returns_empty_frames(self):
         transactions = pd.DataFrame(columns=[
