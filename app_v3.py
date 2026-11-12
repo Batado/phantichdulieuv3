@@ -1719,6 +1719,34 @@ ai_assessment_rows.append({
     "Việc cần xác minh": "Đối chiếu phiếu xuất kho, địa chỉ thực tế, điều phối, tồn kho tại thời điểm xuất và phê duyệt ngoại lệ.",
     "Mức ưu tiên": "Cao" if warehouse_bad_events >= 5 else ("Theo dõi" if warehouse_bad_events or warehouse_unknown_events else "Thấp"),
 })
+# Region and locality are audited separately from warehouse fit.
+region_events = customer_vehicle.drop_duplicates("_event_key").copy()
+region_values = region_events["_mien_goc"].fillna("").astype(str).str.strip()
+locality_checks = region_events["_doi_chieu_dia_ban"].fillna("").astype(str)
+region_missing_count = int(region_values.eq("").sum())
+locality_mismatch_count = int(locality_checks.str.startswith("Không khớp").sum())
+locality_missing_count = int(locality_checks.eq("Thiếu Khu vực").sum())
+province_region_pairs = region_events.loc[
+    region_events["_tinh_thanh_nhan_dien"].fillna("").astype(str).str.strip().ne("")
+    & region_values.ne("")
+].groupby("_tinh_thanh_nhan_dien")["_mien_goc"].nunique()
+multiple_region_provinces = int(province_region_pairs.gt(1).sum())
+ai_assessment_rows.append({
+    "Hạng mục": "Vùng miền và địa bàn NPP",
+    "Kết quả sàng lọc": (
+        f"{region_missing_count} sự kiện thiếu Miền2; "
+        f"{locality_mismatch_count} Khu vực không khớp địa chỉ; "
+        f"{multiple_region_provinces} tỉnh/thành có nhiều nhãn Miền2."
+    ),
+    "Căn cứ số liệu": "Miền2, Khu vưc và địa chỉ trong OM-055; đối chiếu theo từng sự kiện khách hàng + số chứng từ.",
+    "Nhận định tự động": (
+        "Miền2 được giữ theo phân vùng kinh doanh của doanh nghiệp, không tự suy đoán lại theo phân vùng địa lý. "
+        f"Có {locality_missing_count} sự kiện thiếu Khu vưc."
+    ),
+    "Việc cần xác minh": "Rà soát địa chỉ có Khu vưc không khớp; xác nhận các tỉnh/thành có nhiều nhãn Miền2 theo sơ đồ phân vùng kinh doanh được phê duyệt.",
+    "Mức ưu tiên": "Cao" if locality_mismatch_count else ("Theo dõi" if region_missing_count or locality_missing_count or multiple_region_provinces else "Thấp"),
+})
+
 ai_assessment_rows.append({
     "Hạng mục": "Phương tiện xe khách hàng",
     "Kết quả sàng lọc": f"{len(vehicle_day_shared)} trường hợp dùng chung cùng ngày; {len(vehicle_period_shared)} trường hợp dùng chung nhiều ngày.",
@@ -1857,10 +1885,13 @@ if selected_analysis == "Tổng quan":
             f'<b>{status_text}</b><br>{warehouse_detail}</div>',
             unsafe_allow_html=True
         )
+        locality_match_count = int(
+            region_events["_doi_chieu_dia_ban"].eq("Khớp thành phần địa chỉ").sum()
+        )
         st.caption(
-            f"Phù hợp trực tiếp: {good_warehouse_events}; dự phòng cần xác minh: "
-            f"{provisional_warehouse_events}; thiếu dữ liệu/đặc biệt: "
-            f"{warehouse_unknown_events + warehouse_special_events}."
+            f"Phù hợp trực tiếp: {good_warehouse_events}; ngoài danh mục/mâu thuẫn: {warehouse_bad_events}; "
+            f"chưa đủ căn cứ/đặc biệt: {warehouse_unknown_events + warehouse_special_events}. "
+            f"Khu vực theo workbook khớp thành phần địa chỉ: {locality_match_count}/{len(region_events)} sự kiện."
         )
     with quality_col:
         if data_quality_pct < 90:
