@@ -720,6 +720,8 @@ def prepare_transaction_frame(source: pd.DataFrame, mapping_items: tuple, wareho
     pickup_input["Tên khách hàng"] = frame["_ten_kh"]
     pickup_input["Ngày chứng từ"] = frame["_ngay"]
     pickup_input["Loại đơn hàng"] = frame["_loai_don_hang"]
+    pickup_input["Miền2"] = frame["_mien_goc"]
+    pickup_input["Khu vưc"] = get_col("locality").map(clean)
     pickup_input["Ghi chú2"] = frame["_ghi_chu_kho_file"]
     pickup_input["Thành tiền bán"] = frame["_doanh_thu"]
     pickup_input["Số lượng"] = frame["_san_luong"]
