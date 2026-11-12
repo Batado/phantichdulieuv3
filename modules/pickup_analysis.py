@@ -92,27 +92,52 @@ def classify_customer_vehicle(value: Any) -> bool:
     return classify_vehicle_type(value) == "Xe khách hàng"
 
 
+def _address_parts(address: Any) -> list[str]:
+    return [norm(part) for part in re.split(r"[,;|]", clean(address)) if norm(part)]
+
+
 def extract_province(address: Any, matrix_keys: set[str]) -> str:
-    """Resolve the most specific known address segment against the matrix."""
-    parts = [norm(x) for x in re.split(r"[,;|]", clean(address)) if norm(x)]
-    prefixes = ("tinh ", "thanh pho ", "tp ", "tp.")
+    """Return the explicit province/city in the address before using locality aliases.
+
+    Never report a ward/commune name as the province merely because that ward
+    happens to exist in the warehouse matrix. This matters for addresses such
+    as 'Phường Tam Thanh, Tỉnh Lạng Sơn'.
+    """
+    parts = _address_parts(address)
     for part in reversed(parts):
-        candidate = part
-        for prefix in prefixes:
-            if candidate.startswith(prefix):
-                candidate = candidate[len(prefix):].strip()
-                break
-        if candidate in matrix_keys:
-            return candidate
+        if part.startswith("tinh "):
+            return part[len("tinh "):].strip()
+        if part.startswith("thanh pho "):
+            return part[len("thanh pho "):].strip()
+        if part.startswith("tp "):
+            return part[len("tp "):].strip()
+    # Older source addresses may omit administrative prefixes.
     for part in reversed(parts):
         if part in matrix_keys:
             return part
-    # Address cells sometimes contain the province but omit the administrative prefix.
-    for part in reversed(parts):
-        for key in matrix_keys:
-            if part.endswith(" " + key) or part.startswith(key + " "):
-                return key
     return ""
+
+
+def resolve_matrix_location(address: Any, matrix_keys: set[str]) -> tuple[str, str, str]:
+    """Return (province, matrix_key, match_level) without silently promoting a ward.
+
+    The province/city is authoritative when explicitly present. If it has no
+    dedicated matrix row, a matching ward/commune row is retained as a
+    provisional locality reference, not treated as a confirmed province rule.
+    """
+    parts = _address_parts(address)
+    province = extract_province(address, matrix_keys)
+    if province:
+        if province in matrix_keys:
+            return province, province, "Tỉnh/thành có dòng riêng trong ma trận"
+        for part in reversed(parts):
+            if part in matrix_keys:
+                return province, part, "Chỉ khớp đơn vị cấp dưới; tỉnh/thành chưa có dòng riêng"
+        return province, "", "Tỉnh/thành chưa có trong ma trận"
+    for part in reversed(parts):
+        if part in matrix_keys:
+            return "", part, "Chỉ nhận diện đơn vị cấp dưới; thiếu tỉnh/thành"
+    return "", "", "Không nhận diện được tỉnh/thành/địa bàn trong ma trận"
 
 
 def build_warehouse_matrix(reference: pd.DataFrame) -> dict[str, set[str]]:
@@ -168,7 +193,10 @@ def analyze_customer_pickups(
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     source["_address"] = source[address_col].map(clean)
-    source["_province"] = source["_address"].map(lambda x: extract_province(x, matrix_keys))
+    resolved_locations = source["_address"].map(lambda x: resolve_matrix_location(x, matrix_keys))
+    source["_province"] = resolved_locations.map(lambda item: item[0])
+    source["_matrix_key"] = resolved_locations.map(lambda item: item[1])
+    source["_matrix_match_level"] = resolved_locations.map(lambda item: item[2])
     # Business rule: the actual warehouse code is the first three digits of
     # the document number (e.g. 263.18067094 -> 263). The separate warehouse
     # column is retained as a cross-check, not used to override the document.
@@ -184,23 +212,27 @@ def analyze_customer_pickups(
         & document_codes.ne(source["_column_code"])
     )
 
-    source["_allowed_codes"] = source["_province"].map(
-        lambda p: ", ".join(sorted(matrix.get(p, set())))
+    source["_allowed_codes"] = source["_matrix_key"].map(
+        lambda key: ", ".join(sorted(matrix.get(key, set())))
     )
     source["_is_allowed"] = [
-        code in matrix.get(province, set()) if re.fullmatch(r"\d{3}", code or "") else False
-        for province, code in zip(source["_province"], source["_actual_code"])
+        code in matrix.get(matrix_key, set()) if re.fullmatch(r"\d{3}", code or "") else False
+        for matrix_key, code in zip(source["_matrix_key"], source["_actual_code"])
     ]
 
     statuses = np.select(
         [
             source["_province"].eq(""),
+            source["_matrix_key"].eq(""),
+            source["_matrix_match_level"].ne("Tỉnh/thành có dòng riêng trong ma trận"),
             source["_actual_code"].eq(""),
             ~source["_actual_code"].str.fullmatch(r"\d{3}", na=False),
             source["_is_allowed"],
         ],
         [
             "Chưa xác định tỉnh/thành từ địa chỉ",
+            "Tỉnh/thành chưa có trong ma trận - cần bổ sung",
+            "Cần xác minh: tỉnh/thành chưa có dòng riêng; chỉ khớp địa bàn cấp dưới",
             "Thiếu mã kho thực tế",
             "Mã kho đặc biệt/chưa có quy tắc - cần xác minh",
             "Phù hợp danh mục kho",
@@ -253,6 +285,8 @@ def analyze_customer_pickups(
     output["Tên khách hàng"] = source["_customer_name"]
     output["Địa chỉ khách hàng"] = source["_address"]
     output["Tỉnh/thành nhận diện"] = source["_province"]
+    output["Đơn vị khớp ma trận"] = source["_matrix_key"]
+    output["Cấp độ khớp ma trận"] = source["_matrix_match_level"]
     output["Hình thức lấy hàng"] = source[method_col].map(clean)
     output["Biển số xe"] = source[plate_col].map(clean) if plate_col in source.columns else ""
     output["Mã kho thực tế"] = source["_actual_code"]
@@ -293,7 +327,7 @@ def analyze_customer_pickups(
         "Mâu thuẫn dữ liệu giữa các dòng cùng chứng từ",
         "Mâu thuẫn: mã kho trích từ chứng từ khác cột mã kho",
     }
-    incomplete_prefixes = ("Chưa", "Thiếu", "Mã kho")
+    incomplete_prefixes = ("Chưa", "Thiếu", "Mã kho", "Tỉnh/thành", "Cần xác minh")
 
     grouped = detail.groupby(["Mã khách hàng", "Tên khách hàng"], dropna=False)
     customer_summary = grouped.agg(
