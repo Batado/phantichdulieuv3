@@ -16,6 +16,12 @@ class DatabaseUrlTests(unittest.TestCase):
         self.assertIn("postgres:abc%40123@", normalized)
         self.assertNotIn("%2540", normalized)
 
+    def test_raw_slash_in_password_is_encoded(self):
+        raw = "postgresql://postgres:abc/123@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres"
+        normalized = _normalize_database_url(raw)
+        self.assertIn("postgres:abc%2F123@", normalized)
+        self.assertIn("@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres", normalized)
+
 
 if __name__ == "__main__":
     unittest.main()
