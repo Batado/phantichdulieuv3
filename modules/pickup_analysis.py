@@ -227,6 +227,7 @@ def analyze_customer_pickups(
             source["_matrix_match_level"].ne("Tỉnh/thành có dòng riêng trong ma trận"),
             source["_actual_code"].eq(""),
             ~source["_actual_code"].str.fullmatch(r"\d{3}", na=False),
+            source["_actual_code"].isin({"282", "292"}),
             source["_is_allowed"],
         ],
         [
@@ -235,6 +236,7 @@ def analyze_customer_pickups(
             "Cần xác minh: tỉnh/thành chưa có dòng riêng; chỉ khớp địa bàn cấp dưới",
             "Thiếu mã kho thực tế",
             "Mã kho đặc biệt/chưa có quy tắc - cần xác minh",
+            "Mã kho HS Home (282/292) - cần xác minh riêng",
             "Phù hợp danh mục kho",
         ],
         default="Ngoài danh mục kho hợp lý",
