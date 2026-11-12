@@ -80,8 +80,9 @@ def classify_vehicle_type(value: Any) -> str:
     )):
         return "Xe nhà máy"
     if any(token in text for token in (
-        "xe khach hang", "xe kh", "khach hang tu lay", "khach tu lay",
-        "khach hang den lay", "npp tu lay", "customer vehicle",
+        "xe khach hang", "xe kh", "xe khach tu lay", "khach hang tu lay",
+        "khach tu lay", "khach hang den lay", "khach hang tu den lay",
+        "npp tu lay", "customer vehicle", "customer pickup",
     )):
         return "Xe khách hàng"
     return "Chưa xác định"
