@@ -1986,9 +1986,9 @@ ai_assessment_rows.append({
 ai_assessment = pd.DataFrame(ai_assessment_rows)
 
 tab_overview, tab_sales, tab_monthly, tab_warehouse, tab_vehicle, tab_risk, tab_control, tab_unknown = st.tabs([
-    "1. Tổng quan", "2. Doanh thu & mặt hàng", "3. Biến động theo tháng",
-    "4. Kho lấy hàng", "5. Xe khách hàng", "6. Đánh giá rủi ro",
-    "7. Quản lý kiểm soát", "8. Chưa nhận diện"
+    "01  ◈  Tổng quan", "02  ▤  Doanh thu & mặt hàng", "03  ↗  Biến động theo tháng",
+    "04  ▦  Kho lấy hàng", "05  ◉  Xe khách hàng", "06  ⚑  Đánh giá rủi ro",
+    "07  ☷  Quản lý kiểm soát", "08  ?  Chưa nhận diện"
 ])
 
 with tab_overview:
