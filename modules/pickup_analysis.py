@@ -203,10 +203,9 @@ def analyze_customer_pickups(
         )
         .reset_index()
     )
+    denominator = customer_summary["Số_phù_hợp"] + customer_summary["Số_ngoài_danh_mục"]
     customer_summary["Tỷ lệ phù hợp (%)"] = (
-        customer_summary["Số_phù_hợp"]
-        / (customer_summary["Số_phù_hợp"] + customer_summary["Số_ngoài_danh_mục"]).replace(0, pd.NA)
-        * 100
+        customer_summary["Số_phù_hợp"] / denominator.where(denominator.ne(0)) * 100
     )
     customer_summary["Mức ưu tiên"] = customer_summary.apply(
         lambda r: "Cần xác minh" if r["Số_ngoài_danh_mục"] else (
