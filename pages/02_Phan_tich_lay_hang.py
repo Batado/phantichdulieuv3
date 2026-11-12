@@ -48,6 +48,9 @@ p,label,.stCaption {color:#aab5c3;}
 [data-testid="stTabs"] button[aria-selected="true"] {color:#48d7cf!important;border-bottom-color:#48d7cf!important;}
 [data-testid="stFileUploader"] section {background:#171d26;border:1px dashed #405063;border-radius:10px;}
 [data-testid="stButton"] button,[data-testid="stDownloadButton"] button,[data-testid="stPageLink"] a {border-radius:8px;font-weight:700;}
+[data-testid="stSidebar"] [data-testid="stButton"] button {justify-content:flex-start!important;text-align:left!important;background:transparent!important;border:1px solid transparent!important;color:#aeb9c6!important;font-size:12px!important;padding:8px 11px!important;}
+[data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"] {background:#173c42!important;border-color:#28676a!important;color:#eafffd!important;}
+[data-testid="stSidebar"] [data-testid="stButton"] button:hover {background:#1a222c!important;border-color:#334253!important;color:#ffffff!important;}
 [data-testid="stDownloadButton"] button {background:#19b9b0;color:#061014;border:0;}
 hr {border-color:#293441!important;}
 .finding {background:#151b24;border:1px solid #2b3745;border-radius:10px;padding:12px 14px;margin:7px 0;}
