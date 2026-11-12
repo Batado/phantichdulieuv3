@@ -144,7 +144,7 @@ def build_ai_findings(result: dict) -> pd.DataFrame:
     findings.append({
         "Đầu mục": "2. Tính hợp lý kho lấy hàng",
         "Kết quả": f"{fit:,}/{total:,} chứng từ phù hợp" + (f" ({rate:.1f}%)" if pd.notna(rate) else ""),
-        "Nhận định": f"{exception:,} chứng từ ngoài danh mục/mâu thuẫn; {incomplete:,} chứng từ chưa đủ dữ liệu; {flagged:,} NPP có ít nhất một ngoại lệ.",
+        "Nhận định": f"{exception:,} chứng từ ngoài danh mục/mâu thuẫn; {incomplete:,} chứng từ chưa đủ dữ liệu; {flagged:,} khách hàng có ít nhất một ngoại lệ.",
         "Mức ưu tiên": "Cao" if exception >= 10 or exception / max(total, 1) >= .10 else ("Theo dõi" if exception else ("Bổ sung dữ liệu" if incomplete else "Thấp")),
         "Đề xuất": "Đối chiếu địa chỉ NPP, mã kho được phép, phiếu xuất kho, tồn kho, điều phối vận tải và phê duyệt ngoại lệ. Không kết luận sai phạm chỉ từ ma trận.",
     })
@@ -154,9 +154,9 @@ def build_ai_findings(result: dict) -> pd.DataFrame:
         for _, r in top.iterrows() if int(r["Số_ngoài_danh_mục"]) > 0
     )
     findings.append({
-        "Đầu mục": "3. NPP cần ưu tiên",
-        "Kết quả": f"{flagged:,} NPP có ngoại lệ",
-        "Nhận định": top_text or "Chưa có NPP ghi nhận chứng từ ngoài danh mục.",
+        "Đầu mục": "3. Khách hàng cần ưu tiên",
+        "Kết quả": f"{flagged:,} khách hàng có ngoại lệ",
+        "Nhận định": top_text or "Chưa có khách hàng ghi nhận chứng từ ngoài danh mục.",
         "Mức ưu tiên": "Cao" if flagged else "Thấp",
         "Đề xuất": "Chọn chứng từ mẫu, yêu cầu giải trình lý do chọn kho và cung cấp chứng từ điều phối/phê duyệt.",
     })
@@ -265,7 +265,7 @@ with tabs[1]:
         else:
             st.dataframe(priority, use_container_width=True, hide_index=True)
             names = priority["Tên khách hàng"].fillna("").astype(str).tolist()
-            selected = st.selectbox("Chọn NPP xem chứng từ làm căn cứ", names)
+            selected = st.selectbox("Chọn khách hàng xem chứng từ làm căn cứ", names)
             st.dataframe(detail[detail["Tên khách hàng"].fillna("").astype(str).eq(selected)], use_container_width=True, hide_index=True)
 
 with tabs[2]:
