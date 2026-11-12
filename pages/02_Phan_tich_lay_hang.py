@@ -18,7 +18,7 @@ from modules.pickup_analysis import (
 from modules.scope_filter import apply_business_scope_filter
 
 st.set_page_config(
-    page_title="AI kiểm soát kho lấy hàng",
+    page_title="Phân tích kho lấy hàng | Business Control",
     page_icon="📦",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -28,16 +28,23 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
 html, body, [class*="css"] {font-family:'Be Vietnam Pro',sans-serif;}
-[data-testid="stAppViewContainer"] {background:#f5f7fb;color:#172b4d;}
-[data-testid="stHeader"] {background:rgba(245,247,251,.88);}
-section[data-testid="stSidebar"] {background:#edf2f8;border-right:1px solid #dbe4ef;}
-.block-container {max-width:1540px;padding-top:1.15rem;padding-bottom:2.5rem;}
-.hero {background:linear-gradient(115deg,#102b46 0%,#1b5278 62%,#287d91 100%);padding:24px 28px;border-radius:18px;color:white;margin-bottom:18px;box-shadow:0 8px 28px rgba(18,55,85,.14);}
-.hero-kicker {font-size:11px;letter-spacing:.16em;font-weight:800;opacity:.78;}
-.hero-title {font-size:27px;font-weight:800;line-height:1.3;margin:5px 0;}
-.hero-sub {font-size:13px;opacity:.88;}
-.section-title {font-size:16px;font-weight:800;color:#214c70;margin:10px 0 10px;}
+[data-testid="stAppViewContainer"] {background:#f4f7fb;color:#172b4d;}
+[data-testid="stHeader"] {background:rgba(244,247,251,.92);}
+section[data-testid="stSidebar"] {background:#eef3f8;border-right:1px solid #dbe4ef;}
+.block-container {max-width:1580px;padding-top:1.1rem;padding-bottom:2.5rem;}
+.hero {background:linear-gradient(118deg,#102b46 0%,#174d70 58%,#167c83 100%);padding:25px 28px;border-radius:18px;color:white;margin:8px 0 16px;box-shadow:0 10px 30px rgba(16,43,70,.13);}
+.hero-kicker {font-size:10px;letter-spacing:.16em;font-weight:800;opacity:.76;}
+.hero-title {font-size:26px;font-weight:800;line-height:1.28;margin:6px 0;}
+.hero-sub {font-size:13px;opacity:.9;max-width:1050px;line-height:1.55;}
+.section-title {font-size:15px;font-weight:800;color:#214c70;margin:10px 0 9px;letter-spacing:.01em;}
 .section-note {color:#64748b;font-size:12px;margin-top:-5px;margin-bottom:10px;}
+div[data-testid="stMetric"] {background:#fff;border:1px solid #dce5ef;border-radius:12px;padding:12px 14px;box-shadow:0 2px 8px rgba(15,23,42,.025);}
+div[data-testid="stDataFrame"] {border:1px solid #dce5ef;border-radius:11px;overflow:hidden;}
+div[data-testid="stTabs"] button {font-weight:700;font-size:12px;}
+div[data-testid="stDownloadButton"] button {border-radius:10px;font-weight:800;background:#174d70;color:white;border:0;}
+div[data-testid="stPageLink"] a {border-radius:10px;font-weight:700;}
+.finding {box-shadow:0 2px 8px rgba(15,23,42,.025);transition:box-shadow .15s ease;}
+.finding:hover {box-shadow:0 5px 16px rgba(15,23,42,.07);}
 div[data-testid="stMetric"] {background:white;border:1px solid #e2e8f0;border-radius:13px;padding:13px 14px;box-shadow:0 2px 8px rgba(15,23,42,.025);}
 div[data-testid="stDataFrame"] {border:1px solid #e2e8f0;border-radius:11px;overflow:hidden;}
 div[data-testid="stTabs"] button {font-weight:700;}
@@ -56,11 +63,18 @@ div[data-testid="stDownloadButton"] button {border-radius:10px;font-weight:700;}
 
 st.markdown("""
 <div class="hero">
-  <div class="hero-kicker">HOA SEN GROUP · BUSINESS CONTROL INTELLIGENCE</div>
-  <div class="hero-title">📦 Phân tích tính hợp lý kho lấy hàng của Nhà phân phối</div>
-  <div class="hero-sub">Tự động lọc phạm vi chứng từ · Đối chiếu địa chỉ NPP với ma trận kho · Sàng lọc xe khách hàng · Sinh nhận định và đề xuất kiểm soát có căn cứ</div>
+  <div class="hero-kicker">HOA SEN GROUP  /  CONTROL & ANALYTICS</div>
+  <div class="hero-title">PHÂN TÍCH TÍNH HỢP LÝ KHO LẤY HÀNG</div>
+  <div class="hero-sub">Đối chiếu địa chỉ Nhà phân phối với ma trận kho · Phân tích xe khách hàng · Tách riêng xe nhà máy và xe nhà máy thuê ngoài · Cảnh báo có căn cứ, có thể giải trình</div>
 </div>
 """, unsafe_allow_html=True)
+st.page_link("app_v3.py", label="← Trở về tổng quan kinh doanh", icon=":material/dashboard:", use_container_width=False)
+with st.sidebar:
+    st.markdown("### 🧭 ĐIỀU HƯỚNG")
+    st.page_link("app_v3.py", label="Tổng quan kinh doanh", icon=":material/dashboard:", use_container_width=True)
+    st.page_link("pages/02_Phan_tich_lay_hang.py", label="Phân tích kho lấy hàng", icon=":material/warehouse:", use_container_width=True)
+    st.divider()
+    st.caption("PHÂN TÍCH KHO LẤY HÀNG")
 
 ALLOWED_LABELS = [
     "Đơn hàng nội địa",
@@ -410,7 +424,7 @@ findings = build_ai_findings(result)
 pn_count = int(excluded["_ly_do_ngoai_pham_vi"].str.startswith("Số chứng từ bắt đầu bằng PN").sum())
 other_excluded = len(excluded) - pn_count
 
-st.markdown('<div class="section-title">📌 01 · TỔNG QUAN PHẠM VI DỮ LIỆU</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">01  /  TỔNG QUAN PHẠM VI DỮ LIỆU</div>', unsafe_allow_html=True)
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("Tổng dòng OM-055", f"{len(raw):,}")
 k2.metric("Dòng được giữ", f"{len(scoped):,}", help="Chỉ gồm 4 loại đơn hàng được phê duyệt và không có số chứng từ PN.")
@@ -423,13 +437,13 @@ with st.expander("🧾 Quy tắc lọc đang áp dụng", expanded=False):
     st.caption("Tiền tố ERP như HBMC được chuẩn hóa trước khi so sánh. Không phân biệt chữ hoa/chữ thường, dấu tiếng Việt và dấu phân cách.")
 
 tabs = st.tabs([
-    "🧠 AI đánh giá",
-    "🔎 NPP cần xác minh",
-    "🏭 Đối chiếu kho",
-    "🚚 Xe khách hàng",
-    "🏢 Xe nhà máy",
-    "🚛 Xe thuê ngoài",
-    "🧹 Nhật ký & dữ liệu",
+    "01  🧠  AI đánh giá",
+    "02  🎯  NPP xác minh",
+    "03  🏬  Đối chiếu kho",
+    "04  🚚  Xe khách hàng",
+    "05  🏭  Xe nhà máy",
+    "06  🚛  Thuê ngoài",
+    "07  🗂  Nhật ký",
 ])
 
 with tabs[0]:
