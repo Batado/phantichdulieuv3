@@ -22,7 +22,7 @@ from modules.scope_filter import apply_business_scope_filter
 # ============================================================
 
 st.set_page_config(
-    page_title="NPP Business Risk Analytics",
+    page_title="Business Control Intelligence",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -32,11 +32,21 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
 html, body, [class*="css"] {font-family:'Be Vietnam Pro',sans-serif;}
-[data-testid="stAppViewContainer"] {background:#f7f9fc;color:#1f2937;}
-[data-testid="stHeader"] {background:rgba(255,255,255,.92);}
-section[data-testid="stSidebar"] {background:#f1f5f9;border-right:1px solid #dbe3ed;}
-.main-title {font-size:28px;font-weight:800;color:#172b4d;margin-bottom:2px;}
-.sub-title {font-size:12px;color:#64748b;margin-bottom:18px;}
+[data-testid="stAppViewContainer"] {background:#f4f7fb;color:#172b4d;}
+[data-testid="stHeader"] {background:rgba(244,247,251,.92);}
+section[data-testid="stSidebar"] {background:#eef3f8;border-right:1px solid #dbe3ed;}
+.block-container {max-width:1580px;padding-top:1.25rem;padding-bottom:2.75rem;}
+.main-title {font-size:27px;font-weight:800;color:#142f4b;margin-bottom:4px;letter-spacing:-.02em;}
+.sub-title {font-size:12px;color:#64748b;margin-bottom:14px;letter-spacing:.035em;}
+.app-hero {background:linear-gradient(118deg,#102b46 0%,#174d70 58%,#167c83 100%);padding:24px 26px;border-radius:18px;color:#fff;margin:10px 0 18px;box-shadow:0 10px 30px rgba(16,43,70,.13);}
+.app-hero-kicker {font-size:10px;letter-spacing:.16em;font-weight:800;opacity:.76;}
+.app-hero-title {font-size:25px;font-weight:800;line-height:1.25;margin:7px 0 5px;}
+.app-hero-copy {font-size:13px;opacity:.88;max-width:900px;}
+.nav-card {background:#fff;border:1px solid #dce5ef;border-radius:15px;padding:15px 16px;min-height:112px;box-shadow:0 2px 8px rgba(15,23,42,.025);}
+.nav-card-title {font-weight:800;color:#173b5b;font-size:14px;margin-bottom:5px;}
+.nav-card-copy {color:#64748b;font-size:11px;line-height:1.5;}
+div[data-testid="stPageLink"] a {border-radius:10px;font-weight:700;}
+div[data-testid="stMetric"] {background:#fff;border:1px solid #dce5ef;border-radius:12px;box-shadow:0 2px 8px rgba(15,23,42,.025);}
 .section-title {color:#284f75;font-size:14px;font-weight:800;margin:16px 0 8px;}
 .risk-card {padding:12px 14px;border-radius:8px;margin:4px 0;border:1px solid #dbe3ed;}
 .risk-low {background:#effaf3;color:#176b3a;border-left:4px solid #22a06b;}
@@ -542,10 +552,33 @@ def build_excel_export(sheets):
 # HEADER AND UPLOAD
 # ============================================================
 
-st.markdown('<div class="main-title">ĐÁNH GIÁ KIỂM SOÁT KINH DOANH – NHÀ PHÂN PHỐI</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">HOA SEN GROUP | BÁO CÁO DOANH THU · KHO LẤY HÀNG · VẬN CHUYỂN · BIẾN ĐỘNG NPP</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">BUSINESS CONTROL INTELLIGENCE</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">HOA SEN GROUP  /  HỆ THỐNG PHÂN TÍCH VÀ KIỂM SOÁT KINH DOANH</div>', unsafe_allow_html=True)
+st.markdown("""
+<div class="app-hero">
+  <div class="app-hero-kicker">CONTROL & ANALYTICS WORKSPACE</div>
+  <div class="app-hero-title">Trung tâm kiểm soát kinh doanh Nhà phân phối</div>
+  <div class="app-hero-copy">Phân tích doanh thu, biến động NPP, tính hợp lý kho lấy hàng và dấu hiệu bất thường trên dữ liệu giao dịch. Mỗi cảnh báo cần có căn cứ để kiểm tra và giải trình.</div>
+</div>
+""", unsafe_allow_html=True)
+
+st.markdown("#### Truy cập nhanh")
+nav1, nav2, nav3 = st.columns(3, gap="medium")
+with nav1:
+    st.markdown('<div class="nav-card"><div class="nav-card-title">📦 Phân tích kho lấy hàng</div><div class="nav-card-copy">Đối chiếu địa chỉ NPP với ma trận kho; phân tích riêng xe khách hàng, xe nhà máy và xe thuê ngoài.</div></div>', unsafe_allow_html=True)
+    st.page_link("pages/02_Phan_tich_lay_hang.py", label="Mở phân tích kho lấy hàng", icon=":material/warehouse:", use_container_width=True)
+with nav2:
+    st.markdown('<div class="nav-card"><div class="nav-card-title">📊 Tổng quan kinh doanh</div><div class="nav-card-copy">Doanh thu, sản lượng, hành vi mua hàng và biến động giữa các kỳ.</div></div>', unsafe_allow_html=True)
+    st.caption("Khu vực hiện tại")
+with nav3:
+    st.markdown('<div class="nav-card"><div class="nav-card-title">🗃 Hồ sơ kiểm soát</div><div class="nav-card-copy">Lưu phiên phân tích, theo dõi phát hiện, giải trình và bằng chứng.</div></div>', unsafe_allow_html=True)
+    st.caption("Nằm ở cuối trang")
 
 with st.sidebar:
+    st.markdown("## 🧭 ĐIỀU HƯỚNG")
+    st.page_link("app_v3.py", label="Tổng quan kinh doanh", icon=":material/dashboard:", use_container_width=True)
+    st.page_link("pages/02_Phan_tich_lay_hang.py", label="Phân tích kho lấy hàng", icon=":material/warehouse:", use_container_width=True)
+    st.divider()
     st.markdown("## 1. DỮ LIỆU")
     uploaded = st.file_uploader("Tải báo cáo Excel (.xlsx)", type=["xlsx"])
     st.caption("Chọn một workbook mỗi lần phân tích để tránh cộng trùng dữ liệu giữa các báo cáo.")
