@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import io
 
 import numpy as np
@@ -294,7 +295,10 @@ def build_ai_findings(result: dict) -> pd.DataFrame:
     plate_rows = detail.loc[has_plate].copy()
     plate_rows["_plate_key"] = plates[has_plate].str.upper().str.replace(r"[^A-Z0-9]", "", regex=True).values
     if not plate_rows.empty:
-        plate_customer_counts = plate_rows.groupby("_plate_key")["Mã khách hàng"].nunique()
+        plate_rows["_npp_key"] = plate_rows["Mã khách hàng"].fillna("").astype(str).str.strip()
+        blank_npp = plate_rows["_npp_key"].eq("")
+        plate_rows.loc[blank_npp, "_npp_key"] = plate_rows.loc[blank_npp, "Tên khách hàng"].map(norm)
+        plate_customer_counts = plate_rows.groupby("_plate_key")["_npp_key"].nunique()
         shared_plates = int(plate_customer_counts.gt(1).sum())
         top_shared = plate_customer_counts[plate_customer_counts.gt(1)].sort_values(ascending=False).head(5)
         shared_text = ", ".join(f"{plate}: {int(count)} NPP" for plate, count in top_shared.items())
@@ -415,13 +419,20 @@ with tabs[0]:
     for _, row in findings.iterrows():
         level = str(row["Mức ưu tiên"])
         pill_class = "pill-high" if level == "Cao" else ("pill-watch" if level in {"Theo dõi", "Chưa đủ dữ liệu"} else "pill-low")
+        icon = html.escape(str(row["Biểu tượng"]))
+        heading = html.escape(str(row["Đầu mục đánh giá"]))
+        result_text = html.escape(str(row["Kết quả"]))
+        assessment = html.escape(str(row["Nhận định tự động"]))
+        evidence = html.escape(str(row["Căn cứ"]))
+        recommendation = html.escape(str(row["Đề xuất kiểm soát"]))
+        safe_level = html.escape(level)
         st.markdown(
             f'''<div class="finding">
-              <div class="finding-title">{row["Biểu tượng"]} &nbsp; {row["Đầu mục đánh giá"]}</div>
-              <div class="finding-meta"><span class="pill {pill_class}">{level}</span> &nbsp; {row["Kết quả"]}</div>
-              <div class="finding-body"><b>Nhận định:</b> {row["Nhận định tự động"]}<br/>
-              <b>Căn cứ:</b> {row["Căn cứ"]}<br/>
-              <b>Đề xuất:</b> {row["Đề xuất kiểm soát"]}</div>
+              <div class="finding-title">{icon} &nbsp; {heading}</div>
+              <div class="finding-meta"><span class="pill {pill_class}">{safe_level}</span> &nbsp; {result_text}</div>
+              <div class="finding-body"><b>Nhận định:</b> {assessment}<br/>
+              <b>Căn cứ:</b> {evidence}<br/>
+              <b>Đề xuất:</b> {recommendation}</div>
             </div>''',
             unsafe_allow_html=True,
         )
