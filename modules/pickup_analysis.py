@@ -30,8 +30,10 @@ def normalize_code(value: Any) -> str:
         return ""
     if re.fullmatch(r"\d+(?:\.0+)?", text):
         return str(int(float(text))).zfill(3)
-    digits = re.sub(r"[^0-9]", "", text)
-    return digits.zfill(3) if digits and len(digits) <= 3 else digits
+    compact = re.sub(r"[^A-Z0-9]", "", text.upper())
+    if compact.isdigit() and len(compact) <= 3:
+        return compact.zfill(3)
+    return compact
 
 
 def parse_code_sequence(value: Any) -> set[str]:
@@ -129,6 +131,8 @@ def analyze_customer_pickups(
             status = "Chưa xác định tỉnh/thành từ địa chỉ"
         elif not actual_code:
             status = "Thiếu mã kho thực tế"
+        elif not re.fullmatch(r"\d{3}", actual_code):
+            status = "Mã kho đặc biệt/chưa có quy tắc - cần xác minh"
         elif actual_code in allowed:
             status = "Phù hợp danh mục kho"
         else:
