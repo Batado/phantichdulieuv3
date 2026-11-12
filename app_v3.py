@@ -992,6 +992,7 @@ warehouse_unknown = customer_vehicle[
     customer_vehicle["_doi_chieu_kho_tong_hop"].astype(str).str.startswith(
         ("Chưa", "Thiếu", "Mã kho", "Tỉnh/thành", "Cần xác minh")
     )
+    & ~customer_vehicle["_doi_chieu_kho_tong_hop"].astype(str).str.startswith("Mã kho HS Home")
 ].copy()
 warehouse_counts = (
     customer_vehicle.groupby("_doi_chieu_kho_tong_hop")
@@ -1554,13 +1555,7 @@ for _, row in customer_summary.iterrows():
         bool(npp_vehicle_rows["_bien_so_hop_le"].any())
         if has_customer_vehicle_data else False
     )
-    comparable_warehouse_statuses = {
-        "Phù hợp danh mục kho",
-        "Không khớp danh sách kho vùng miền trong file",
-        "Theo ghi chú file: không hợp lý - cần xác minh",
-        "Mâu thuẫn: thuật toán phù hợp nhưng file ghi không hợp lý",
-        "Mâu thuẫn: file ghi hợp lý nhưng kho ngoài vùng địa chỉ",
-    }
+    comparable_warehouse_statuses = {"Phù hợp danh mục kho"} | warehouse_evidence_statuses
     has_warehouse_evidence = (
         bool(npp_vehicle_rows["_doi_chieu_kho_tong_hop"].isin(comparable_warehouse_statuses).any())
         if has_customer_vehicle_data else False
@@ -2432,34 +2427,37 @@ elif selected_analysis == "Biến động theo tháng":
 
 elif selected_analysis == "Đối chiếu kho":
     st.markdown('<div class="section-title">ĐỐI CHIẾU KHO LẤY HÀNG VỚI ĐỊA CHỈ NPP</div>', unsafe_allow_html=True)
-    st.caption("Chỉ xét các dòng có hình thức vận chuyển là Xe khách hàng. Xe nhà máy và xe nhà máy thuê ngoài được loại khỏi phần này.")
+    st.caption("Chỉ xe khách hàng được đối chiếu. Tỉnh/thành lấy từ thành phần hành chính trong địa chỉ; mã kho hợp lý lấy trực tiếp từ sheet 'kho lấy hàng'. Miền2 được giữ như phân loại kinh doanh của doanh nghiệp.")
     a, b, c = st.columns(3)
     a.metric("Dòng xe khách hàng", f"{len(customer_vehicle):,}")
     b.metric("Ngoài danh mục / mâu thuẫn", f"{len(warehouse_evidence):,}")
     c.metric("Kho đặc biệt / chưa đủ dữ liệu", f"{len(warehouse_special) + len(warehouse_unknown):,}")
     if not warehouse_counts.empty:
         st.dataframe(warehouse_counts, use_container_width=True, hide_index=True)
-    st.markdown("### :material/wrong_location: Giao dịch kho ngoài vùng ưu tiên")
+    st.markdown("### :material/wrong_location: Giao dịch ngoài danh mục hoặc có mâu thuẫn")
     if warehouse_evidence.empty:
-        st.success("Không có giao dịch ngoài vùng ưu tiên theo ma trận sàng lọc hiện tại.")
+        st.success("Không có giao dịch ngoài danh mục hoặc mâu thuẫn theo ma trận hiện tại.")
     else:
-        st.warning(f"Có {len(warehouse_evidence):,} dòng cần xác minh khoảng cách, điều phối và lý do chọn kho.")
+        st.warning(f"Có {len(warehouse_evidence):,} dòng cần xác minh. Đây là cảnh báo theo ma trận, không tự động kết luận sai phạm.")
         st.dataframe(warehouse_evidence[[
             "_ten_kh", "_dia_chi", "_mien_goc", "_vung", "_chung_tu", "_ma_kho", "_ten_kho",
             "_doi_chieu_kho", "_doi_chieu_kho_tong_hop", "_kho_hop_ly_theo_dia_chi",
+            "_tinh_thanh_nhan_dien", "_don_vi_khop_ma_tran",
             "_ly_do_doi_chieu_kho", "_kho_vung_file", "_ghi_chu_kho_file", "_ngay", "_bien_so_goc"
         ]].rename(columns={
             "_ten_kh": "NPP", "_dia_chi": "Địa chỉ", "_mien_goc": "Miền2 gốc",
             "_vung": "Vùng/nhóm địa chỉ", "_ma_kho": "Mã kho từ 3 số đầu chứng từ",
             "_ten_kho": "Tên kho theo danh mục", "_doi_chieu_kho": "Đối chiếu theo địa chỉ",
             "_doi_chieu_kho_tong_hop": "Kết quả tổng hợp",
-            "_kho_hop_ly_theo_dia_chi": "Kho được chấp nhận theo địa chỉ",
+            "_kho_hop_ly_theo_dia_chi": "Mã kho được phép theo ma trận",
+            "_tinh_thanh_nhan_dien": "Tỉnh/thành từ địa chỉ",
+            "_don_vi_khop_ma_tran": "Địa bàn khớp ma trận",
             "_ly_do_doi_chieu_kho": "Lý do đánh giá",
             "_kho_vung_file": "Kho vùng miền ghi trong file",
             "_ghi_chu_kho_file": "Ghi chú gốc trong file", "_ngay": "Ngày",
             "_chung_tu": "Chứng từ", "_bien_so_goc": "Số xe gốc"
         }), use_container_width=True, hide_index=True)
-    st.markdown("### Kho hàng gửi tại HS Home của HSN Phú Mỹ")
+    st.markdown("### Mã kho HS Home cần xác minh riêng")
     if warehouse_special.empty:
         st.info("Không có giao dịch thuộc mã kho HS Home (282/292).")
     else:
