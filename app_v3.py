@@ -667,21 +667,18 @@ def prepare_transaction_frame(source: pd.DataFrame, mapping_items: tuple) -> pd.
         for region in frame["_vung"].dropna().unique()
     }
     frame["_kho_hop_ly_theo_dia_chi"] = frame["_vung"].map(allowed_by_region).fillna("")
-    reason_by_region = {}
-    for region, code in zip(frame["_vung"], frame["_ma_kho"]):
-        allowed = allowed_warehouses_for_region(region)[0]
-        reason_by_region[region] = (
+    frame["_ly_do_doi_chieu_kho"] = [
+        (
             f"Địa chỉ thuộc {region}; kho thực tế {code} - {warehouse_name(code)}; "
-            f"kho chấp nhận: {', '.join(sorted(allowed))}."
-            if allowed and code in WAREHOUSE_NAMES
+            f"kho chấp nhận: {', '.join(sorted(allowed_warehouses_for_region(region)[0]))}."
+            if allowed_warehouses_for_region(region)[0] and code in WAREHOUSE_NAMES
             else (
                 f"Chưa xác định được khu vực từ địa chỉ/miền; mã kho chứng từ: {code or 'trống'}."
-                if not allowed
+                if not allowed_warehouses_for_region(region)[0]
                 else f"Không trích xuất được mã kho hợp lệ từ số chứng từ: {code or 'trống'}."
             )
         )
-    frame["_ly_do_doi_chieu_kho"] = [
-        reason_by_region.get(region, "") for region in frame["_vung"]
+        for region, code in zip(frame["_vung"], frame["_ma_kho"])
     ]
     frame["_customer_key"] = np.where(
         frame["_ma_kh"].ne(""),
@@ -709,6 +706,32 @@ scope_total = len(raw)
 scope_kept = len(df)
 scope_excluded_pn = int(scope_excluded["_ly_do_ngoai_pham_vi"].str.startswith("Số chứng từ bắt đầu bằng PN").sum())
 scope_excluded_type = len(scope_excluded) - scope_excluded_pn
+
+st.markdown("### PHẠM VI DỮ LIỆU ĐƯỢC ĐƯA VÀO PHÂN TÍCH")
+scope_k1, scope_k2, scope_k3, scope_k4 = st.columns(4)
+scope_k1.metric("Dòng nguồn", f"{scope_total:,}")
+scope_k2.metric("Dòng được giữ", f"{scope_kept:,}")
+scope_k3.metric("Loại PN / hàng gửi kho", f"{scope_excluded_pn:,}")
+scope_k4.metric("Loại do đơn hàng ngoài phạm vi", f"{scope_excluded_type:,}")
+with st.expander("Xem nhật ký các dòng bị loại khỏi phạm vi", expanded=False):
+    if scope_excluded.empty:
+        st.success("Không có dòng nào bị loại khỏi phạm vi.")
+    else:
+        excluded_view = scope_excluded.copy()
+        display_cols = [
+            col for col in [
+                "_dong_nguon", mapped.get("document"), mapped.get("order_type"),
+                "_ten_kh", "_ngay", "_ly_do_ngoai_pham_vi"
+            ] if col and col in excluded_view.columns
+        ]
+        st.dataframe(excluded_view[display_cols], use_container_width=True, hide_index=True)
+        st.download_button(
+            "Tải danh sách dòng bị loại",
+            data=build_excel_export({"Dong_bi_loai": excluded_view}),
+            file_name="Nhat_ky_loc_pham_vi.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="scope_excluded_export",
+        )
 
 # NPP classification must be based on Loại khách hàng, not Mã nhóm KH.
 npp_mask = df["_loai_kh_norm"].isin(NPP_TYPES)
@@ -2545,6 +2568,7 @@ export_sheets = {
     "Dia_chi_trung": address_shared,
     "Chua_nhan_dien": unrecognized,
     "Du_lieu_da_loc": export_rows,
+    "Nhat_ky_dong_bi_loai": scope_excluded,
 }
 try:
     excel_bytes = build_excel_export(export_sheets)
@@ -2559,6 +2583,8 @@ except Exception as exc:
     st.error(f"Không tạo được file Excel xuất kết quả: {exc}")
 
 st.caption(
+    "Phạm vi phân tích đã loại chứng từ PN và chỉ giữ bốn loại đơn hàng được phê duyệt. "
+    "Nhật ký dòng bị loại được xuất riêng để phục vụ truy vết. "
     "Lưu ý: hệ thống sàng lọc dấu hiệu dựa trên dữ liệu được cung cấp. "
     "Cần đối chiếu chứng từ, xác minh thực tế và lấy giải trình trước khi kết luận. "
     "Các bản ghi chưa nhận diện được tách riêng, không mặc định là rủi ro thấp."
