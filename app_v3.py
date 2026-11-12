@@ -8,7 +8,12 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import plotly.io as pio
 import streamlit as st
+
+pio.templates.default = "plotly_dark"
+px.defaults.template = "plotly_dark"
+px.defaults.color_discrete_sequence = ["#45d6cf", "#4d8dff", "#9b8cff", "#f2b866", "#f2788a"]
 
 from modules.control_center import render_control_center
 from modules.scope_filter import apply_business_scope_filter
@@ -25,72 +30,36 @@ st.set_page_config(
     page_title="Business Control Intelligence",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
-html, body, [class*="css"] {font-family:'Be Vietnam Pro',sans-serif;}
-[data-testid="stAppViewContainer"] {background:#f4f7fb;color:#172b4d;}
-[data-testid="stHeader"] {background:rgba(244,247,251,.92);}
-section[data-testid="stSidebar"] {background:#eef3f8;border-right:1px solid #dbe3ed;}
-.block-container {max-width:1580px;padding-top:1.25rem;padding-bottom:2.75rem;}
-.main-title {font-size:27px;font-weight:800;color:#142f4b;margin-bottom:4px;letter-spacing:-.02em;}
-.sub-title {font-size:12px;color:#64748b;margin-bottom:14px;letter-spacing:.035em;}
-.app-hero {background:linear-gradient(118deg,#102b46 0%,#174d70 58%,#167c83 100%);padding:24px 26px;border-radius:18px;color:#fff;margin:10px 0 18px;box-shadow:0 10px 30px rgba(16,43,70,.13);}
-.app-hero-kicker {font-size:10px;letter-spacing:.16em;font-weight:800;opacity:.76;}
-.app-hero-title {font-size:25px;font-weight:800;line-height:1.25;margin:7px 0 5px;}
-.app-hero-copy {font-size:13px;opacity:.88;max-width:900px;}
-.nav-card {background:#fff;border:1px solid #dce5ef;border-radius:15px;padding:15px 16px;min-height:112px;box-shadow:0 2px 8px rgba(15,23,42,.025);}
-.nav-card-title {font-weight:800;color:#173b5b;font-size:14px;margin-bottom:5px;}
-.nav-card-copy {color:#64748b;font-size:11px;line-height:1.5;}
-div[data-testid="stPageLink"] a {border-radius:10px;font-weight:700;}
-div[data-testid="stMetric"] {background:#fff;border:1px solid #dce5ef;border-radius:12px;box-shadow:0 2px 8px rgba(15,23,42,.025);}
-.section-title {color:#284f75;font-size:14px;font-weight:800;margin:16px 0 8px;}
-.risk-card {padding:12px 14px;border-radius:8px;margin:4px 0;border:1px solid #dbe3ed;}
-.risk-low {background:#effaf3;color:#176b3a;border-left:4px solid #22a06b;}
-.risk-watch {background:#fff9e8;color:#8a5a00;border-left:4px solid #e0a100;}
-.risk-high {background:#fff3e8;color:#994d00;border-left:4px solid #f97316;}
-.risk-critical {background:#fff0f0;color:#a12a2a;border-left:4px solid #d92d20;}
-.risk-unknown {background:#f1f5f9;color:#475569;border-left:4px solid #94a3b8;}
-div[data-testid="stMetric"] {background:#fff;padding:10px 12px;border-radius:10px;border:1px solid #dbe3ed;box-shadow:0 1px 2px rgba(15,23,42,.035);}
-.stTabs [data-baseweb="tab-list"] {gap:6px;border-bottom:1px solid #dbe3ed;}
-.stTabs [data-baseweb="tab"] {height:42px;padding:0 13px;border-radius:8px 8px 0 0;font-weight:600;}
-.stTabs [aria-selected="true"] {background:#eaf2fb;color:#174b78;}
-div[data-testid="stDataFrame"] {border:1px solid #e2e8f0;border-radius:9px;overflow:hidden;}
-div[data-testid="stExpander"] {border:1px solid #e2e8f0;border-radius:9px;}
-.risk-orange {background:#fff3e8;color:#994d00;border-left:4px solid #f97316;}
-
-/* Compact charcoal interface */
-[data-testid="stAppViewContainer"] {background:#0b0f14!important;color:#e5e7eb!important;}
-[data-testid="stHeader"] {background:rgba(11,15,20,.94)!important;}
+:root {color-scheme:dark;}
+[data-testid="stAppViewContainer"] {background:#0b0d11!important;color:#e7edf4!important;}
+[data-testid="stHeader"] {background:rgba(11,13,17,.94)!important;}
 [data-testid="stToolbar"] {background:transparent!important;}
-section[data-testid="stSidebar"] {background:#111820!important;border-right:1px solid #263341!important;}
-section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h1,
-section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2,
-section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 {color:#f3f4f6!important;font-size:1rem!important;margin:.45rem 0!important;}
-.block-container {max-width:1480px;padding-top:1rem;padding-bottom:1.5rem;}
-.main-title {font-size:21px;font-weight:800;color:#f8fafc;margin-bottom:2px;letter-spacing:.01em;}
-.sub-title {font-size:10px;color:#94a3b8;margin-bottom:8px;letter-spacing:.07em;}
-.app-hero {background:linear-gradient(110deg,#151d27 0%,#202c39 100%);border:1px solid #344253;padding:16px 20px;border-radius:12px;color:#f8fafc;margin:8px 0 12px;box-shadow:none;}
-.app-hero-kicker {font-size:9px;letter-spacing:.14em;font-weight:800;color:#93c5fd;}
-.app-hero-title {font-size:20px;font-weight:800;line-height:1.2;margin:5px 0;}
-.app-hero-copy {font-size:11px;color:#cbd5e1;max-width:900px;line-height:1.5;}
-.nav-card {background:#151d27;border:1px solid #2b3948;border-radius:10px;padding:11px 13px;min-height:80px;box-shadow:none;}
-.nav-card-title {font-weight:700;color:#e5edf6;font-size:12px;margin-bottom:3px;}
-.nav-card-copy {color:#94a3b8;font-size:10px;line-height:1.4;}
-div[data-testid="stMetric"] {background:#151d27!important;border:1px solid #2b3948!important;border-radius:10px!important;box-shadow:none!important;padding:10px 12px!important;}
-div[data-testid="stMetricLabel"] {color:#94a3b8!important;font-size:11px!important;}
-div[data-testid="stMetricValue"] {color:#f8fafc!important;font-size:1.65rem!important;}
-div[data-testid="stDataFrame"], div[data-testid="stTable"] {border:1px solid #2b3948;border-radius:9px;overflow:hidden;}
-div[data-testid="stExpander"] {background:#131b24;border:1px solid #2b3948;border-radius:9px;}
-div[data-testid="stTabs"] button {font-size:11px;font-weight:700;color:#aab7c6;}
-div[data-testid="stTabs"] button[aria-selected="true"] {color:#93c5fd!important;}
-div[data-testid="stButton"] button, div[data-testid="stDownloadButton"] button, div[data-testid="stPageLink"] a {border-radius:8px;font-weight:700;}
-div[data-testid="stFileUploader"] section {background:#151d27;border:1px dashed #425366;border-radius:9px;}
-hr {border-color:#293746!important;}
-[data-testid="stAlert"] {border-radius:9px;}
+section[data-testid="stSidebar"] {background:#12161d!important;border-right:1px solid #252d38!important;}
+[data-testid="stSidebarNav"] {display:none!important;}
+.block-container {max-width:1660px;padding-top:1rem;padding-bottom:1.5rem;}
+h1,h2,h3,h4 {color:#f4f7fb!important;letter-spacing:-.02em;}
+p,label {color:#aab5c3;}
+.brand-title {font-size:18px;font-weight:800;color:#f4f7fb;letter-spacing:-.02em;}
+.brand-sub {font-size:9px;letter-spacing:.14em;color:#8292a4;margin-top:2px;}
+.section-title {color:#d7e1eb;font-size:13px;font-weight:800;margin:12px 0 8px;letter-spacing:.045em;}
+[data-testid="stMetric"] {background:#171d26!important;border:1px solid #2a3543!important;border-radius:11px!important;padding:10px 12px!important;box-shadow:none!important;}
+[data-testid="stMetricLabel"] {color:#9aa8b8!important;font-size:10px!important;}
+[data-testid="stMetricValue"] {color:#f8fafc!important;font-size:1.55rem!important;font-weight:700!important;}
+[data-testid="stDataFrame"],[data-testid="stTable"] {border:1px solid #293441;border-radius:10px;overflow:hidden;}
+[data-testid="stExpander"] {background:#141a22;border:1px solid #293441;border-radius:10px;}
+[data-testid="stTabs"] button {font-size:11px;font-weight:700;color:#aab5c3;}
+[data-testid="stTabs"] button[aria-selected="true"] {color:#48d7cf!important;border-bottom-color:#48d7cf!important;}
+[data-testid="stFileUploader"] section {background:#171d26;border:1px dashed #405063;border-radius:10px;}
+[data-testid="stButton"] button,[data-testid="stDownloadButton"] button,[data-testid="stPageLink"] a {border-radius:8px;font-weight:700;}
+[data-testid="stDownloadButton"] button {background:#19b9b0;color:#061014;border:0;}
+hr {border-color:#293441!important;}
+.stRadio label {color:#cbd5e1!important;}
+.stMultiSelect [data-baseweb="tag"] {background:#16464a!important;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -582,28 +551,31 @@ def build_excel_export(sheets):
 # HEADER AND UPLOAD
 # ============================================================
 
-st.markdown('<div class="main-title">BUSINESS CONTROL INTELLIGENCE</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">HOA SEN GROUP  /  HỆ THỐNG PHÂN TÍCH VÀ KIỂM SOÁT KINH DOANH</div>', unsafe_allow_html=True)
 st.markdown("""
-<div class="app-hero">
-  <div class="app-hero-kicker">CONTROL & ANALYTICS WORKSPACE</div>
-  <div class="app-hero-title">Trung tâm kiểm soát kinh doanh Nhà phân phối</div>
-  <div class="app-hero-copy">Phân tích doanh thu, biến động NPP, tính hợp lý kho lấy hàng và dấu hiệu bất thường trên dữ liệu giao dịch. Mỗi cảnh báo cần có căn cứ để kiểm tra và giải trình.</div>
-</div>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<div class="app-hero">
-  <div class="app-hero-kicker">CONTROL WORKSPACE</div>
-  <div class="app-hero-title">Kiểm soát kinh doanh Nhà phân phối</div>
-  <div class="app-hero-copy">Tập trung dữ liệu, đánh giá ngoại lệ và truy vết bằng chứng trên cùng một giao diện.</div>
+<div style="display:flex;align-items:center;gap:12px;padding:3px 0 14px;border-bottom:1px solid #293441;margin-bottom:16px">
+  <div style="width:40px;height:40px;border-radius:11px;background:#173c42;color:#52e2d6;display:flex;align-items:center;justify-content:center;font-size:21px">⌘</div>
+  <div><div class="brand-title">AI POWERED BUSINESS ANALYTICS</div><div class="brand-sub">HOA SEN GROUP / BUSINESS CONTROL INTELLIGENCE</div></div>
 </div>
 """, unsafe_allow_html=True)
 
 with st.sidebar:
+    st.markdown("## ◈ BUSINESS CONTROL")
+    st.caption("WORKSPACE / PHÂN TÍCH KINH DOANH")
+    selected_analysis = st.radio(
+        "ĐIỀU HƯỚNG",
+        [
+            "Tổng quan", "Doanh thu & mặt hàng", "Biến động theo tháng",
+            "Đối chiếu kho", "Xe khách hàng", "Đánh giá rủi ro",
+            "Quản lý kiểm soát", "Chưa nhận diện", "Phân tích kho lấy hàng"
+        ],
+        key="business_analysis_nav",
+    )
+    if selected_analysis == "Phân tích kho lấy hàng":
+        st.switch_page("pages/02_Phan_tich_lay_hang.py")
+    st.divider()
     st.markdown("### :material/database: DỮ LIỆU")
     uploaded = st.file_uploader("Tải báo cáo Excel", type=["xlsx"])
-    st.caption("Mỗi lần phân tích chọn một workbook.")
+    st.caption("Chọn một workbook cho mỗi phiên phân tích.")
 
 if uploaded is None:
     st.info("Tải báo cáo Excel để bắt đầu phân tích mới. Bạn vẫn có thể truy cập hồ sơ kiểm soát và sổ phát hiện đã lưu ở bên dưới.")
@@ -1985,13 +1957,7 @@ ai_assessment_rows.append({
 })
 ai_assessment = pd.DataFrame(ai_assessment_rows)
 
-tab_overview, tab_sales, tab_monthly, tab_warehouse, tab_vehicle, tab_risk, tab_control, tab_unknown = st.tabs([
-    "01 🏠 Tổng quan", "02 📊 Doanh thu & mặt hàng", "03 📈 Biến động theo tháng",
-    "04 🏬 Kho lấy hàng", "05 🚚 Xe khách hàng", "06 🧠 Đánh giá rủi ro",
-    "07 🗂️ Quản lý kiểm soát", "08 🔎 Chưa nhận diện"
-])
-
-with tab_overview:
+if selected_analysis == "Tổng quan":
     period_title = (
         f"Tuần {selected_period_value}"
         if report_period_type == "Tuần"
@@ -2265,7 +2231,7 @@ with tab_overview:
             for region, rule in ADDRESS_WAREHOUSE_RULES.items()
         ]), use_container_width=True, hide_index=True)
 
-with tab_sales:
+elif selected_analysis == "Doanh thu & mặt hàng":
     st.markdown('<div class="section-title">PHÂN TÍCH DOANH THU VÀ MẶT HÀNG</div>', unsafe_allow_html=True)
     st.caption("Chỉ phân tích doanh thu, sản lượng và khối lượng. Không sử dụng giá bán đơn vị, giá vốn hoặc lợi nhuận. Dòng mã hàng bắt đầu bằng Z được loại khỏi phân tích mặt hàng/doanh thu.")
     if not monthly_sales.empty:
@@ -2321,7 +2287,7 @@ with tab_sales:
     else:
         st.info("Cần ít nhất 3 tháng dữ liệu để sàng lọc biến động theo xu hướng.")
 
-with tab_monthly:
+elif selected_analysis == "Biến động theo tháng":
     st.markdown('<div class="section-title">BIẾN ĐỘNG DOANH THU VÀ SẢN LƯỢNG THEO NPP</div>', unsafe_allow_html=True)
     if not prior_months or not later_months or customer_monthly_review.empty:
         st.info("Cần ít nhất hai tháng dữ liệu và chọn được mốc chia kỳ để so sánh.")
@@ -2446,7 +2412,7 @@ with tab_monthly:
                 "điều chuyển NPP trong cùng thời kỳ."
             )
 
-with tab_warehouse:
+elif selected_analysis == "Đối chiếu kho":
     st.markdown('<div class="section-title">ĐỐI CHIẾU KHO LẤY HÀNG VỚI ĐỊA CHỈ NPP</div>', unsafe_allow_html=True)
     st.caption("Chỉ xét các dòng có hình thức vận chuyển là Xe khách hàng. Xe nhà máy và xe nhà máy thuê ngoài được loại khỏi phần này.")
     a, b, c = st.columns(3)
@@ -2513,7 +2479,7 @@ with tab_warehouse:
         "6. Chỉ kết luận bất thường sau khi đối chiếu hồ sơ, giải trình và phê duyệt ngoại lệ."
     )
 
-with tab_vehicle:
+elif selected_analysis == "Xe khách hàng":
     st.markdown('<div class="section-title">PHÂN TÍCH XE KHÁCH HÀNG DÙNG CHUNG</div>', unsafe_allow_html=True)
     st.caption("Hiện tại chỉ phân tích Xe khách hàng. Xe nhà máy và thuê ngoài được loại trừ; có thể bổ sung loại hình khác ở phiên bản sau.")
     a, b, c = st.columns(3)
@@ -2560,7 +2526,7 @@ with tab_vehicle:
         "Trường hợp lặp lại qua nhiều ngày cần kiểm tra thỏa thuận vận chuyển và mối liên hệ giữa các NPP."
     )
 
-with tab_risk:
+elif selected_analysis == "Đánh giá rủi ro":
     st.markdown('<div class="section-title">BẢNG ĐÁNH GIÁ VÀ NHẬN ĐỊNH RỦI RO NPP</div>', unsafe_allow_html=True)
     st.caption("Điểm là mức ưu tiên sàng lọc theo các tín hiệu quan sát được; không phải kết luận vi phạm. Bảng hiển thị riêng điểm từng nhóm để có thể truy nguyên lý do.")
     st.info(
@@ -2627,7 +2593,7 @@ with tab_risk:
         with col:
             st.markdown(f'<div class="risk-card {css}"><b>{title}</b><br>{desc}</div>', unsafe_allow_html=True)
 
-with tab_unknown:
+elif selected_analysis == "Chưa nhận diện":
     st.markdown('<div class="section-title">DỮ LIỆU CHƯA NHẬN DIỆN / CHƯA ĐỦ CĂN CỨ</div>', unsafe_allow_html=True)
     st.caption("Các dòng này được tách riêng, không tự suy đoán và không dùng làm bằng chứng kết luận rủi ro.")
     if unrecognized.empty:
@@ -2649,7 +2615,7 @@ with tab_unknown:
             "_nhom_chua_nhan_dien": "Nhóm lỗi", "_ly_do_chua_nhan_dien": "Lý do"
         }), use_container_width=True, hide_index=True)
 
-with tab_control:
+elif selected_analysis == "Quản lý kiểm soát":
     control_data = {
         "filtered": filtered,
         "risk_summary": risk_summary,
