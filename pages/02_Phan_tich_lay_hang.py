@@ -418,14 +418,23 @@ def build_ai_findings(result: dict) -> pd.DataFrame:
 with st.sidebar:
     st.markdown("## ◈ BUSINESS CONTROL")
     st.caption("PHÂN TÍCH KHO LẤY HÀNG")
-    st.page_link("app_v3.py", label="Tổng quan kinh doanh", icon=":material/dashboard:", use_container_width=True)
+    st.page_link("app_v3.py", label="⌂  Tổng quan kinh doanh", use_container_width=True)
+    st.markdown("#### ĐIỀU HƯỚNG")
+    pickup_menu = {
+        "AI đánh giá": "◈  AI đánh giá",
+        "NPP cần xác minh": "⌕  NPP cần xác minh",
+        "Đối chiếu kho": "▦  Đối chiếu kho",
+        "Xe khách hàng": "▰  Xe khách hàng",
+        "Xe nhà máy": "▣  Xe nhà máy",
+        "Xe nhà máy thuê ngoài": "⇢  Xe nhà máy thuê ngoài",
+        "Nhật ký dữ liệu": "▤  Nhật ký dữ liệu",
+    }
     pickup_section = st.radio(
         "ĐIỀU HƯỚNG",
-        [
-            "AI đánh giá", "NPP cần xác minh", "Đối chiếu kho",
-            "Xe khách hàng", "Xe nhà máy", "Xe nhà máy thuê ngoài", "Nhật ký dữ liệu"
-        ],
+        list(pickup_menu),
+        format_func=lambda value: pickup_menu[value],
         key="pickup_section_nav",
+        label_visibility="collapsed",
     )
     st.divider()
     st.markdown("### :material/database: DỮ LIỆU")
