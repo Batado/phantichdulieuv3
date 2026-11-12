@@ -8,6 +8,7 @@ from modules.pickup_analysis import (
     extract_province,
     parse_code_sequence,
     classify_vehicle_type,
+    resolve_matrix_location,
 )
 
 
@@ -47,6 +48,39 @@ class PickupAnalysisTests(unittest.TestCase):
         self.assertEqual(detail.iloc[0]["Mã kho tại cột dữ liệu"], "251")
         self.assertTrue(detail.iloc[0]["Kết quả đối chiếu"].startswith("Mâu thuẫn"))
         self.assertEqual(summary.iloc[0]["Số_ngoài_danh_mục"], 1)
+
+
+    def test_explicit_province_is_not_replaced_by_ward_alias(self):
+        matrix = pd.DataFrame([
+            {"Khu vực/Tỉnh thành": "Phường Tam Thanh", "Kho hợp lý": "Hà Nam, Bình Định", "Mã kho": 261291},
+        ])
+        rules = build_warehouse_matrix(matrix)
+        address = "Số 561, Đường Trần Đăng Ninh, Phường Tam Thanh, Tỉnh Lạng Sơn, Việt Nam"
+        self.assertEqual(extract_province(address, set(rules)), "lang son")
+        province, matrix_key, level = resolve_matrix_location(address, set(rules))
+        self.assertEqual(province, "lang son")
+        self.assertEqual(matrix_key, "phuong tam thanh")
+        self.assertIn("chưa có dòng riêng", level)
+
+    def test_unmapped_province_is_not_silently_scored_as_outside_or_fit(self):
+        transactions = pd.DataFrame([{
+            "Địa chỉ": "Số 561, Phường Tam Thanh, Tỉnh Lạng Sơn, Việt Nam",
+            "Mã kho2": 261,
+            "Số chứng từ": "261.123",
+            "Shipping method": "Xe khách hàng",
+            "Mã khách hàng": "KH-LS",
+            "Tên khách hàng": "NPP Lạng Sơn",
+            "Ghi chú2": "Hợp lý",
+        }])
+        matrix = pd.DataFrame([
+            {"Khu vực/Tỉnh thành": "Phường Tam Thanh", "Kho hợp lý": "Hà Nam, Bình Định", "Mã kho": 261291},
+        ])
+        detail, summary, _ = analyze_customer_pickups(transactions, matrix)
+        self.assertEqual(detail.iloc[0]["Tỉnh/thành nhận diện"], "lang son")
+        self.assertEqual(detail.iloc[0]["Đơn vị khớp ma trận"], "phuong tam thanh")
+        self.assertTrue(detail.iloc[0]["Kết quả đối chiếu"].startswith("Cần xác minh"))
+        self.assertEqual(summary.iloc[0]["Số_chưa_đủ_dữ_liệu"], 1)
+        self.assertEqual(summary.iloc[0]["Số_phù_hợp"], 0)
 
     def test_matrix_and_province_match(self):
         matrix = pd.DataFrame([{
