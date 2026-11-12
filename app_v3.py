@@ -1132,7 +1132,7 @@ else:
 if len(month_list) >= 2:
     default_cut_index = max(0, min(len(month_list) - 2, 4))
     with st.sidebar:
-        st.markdown("## 5. SO SÁNH BIẾN ĐỘNG")
+        st.markdown("## :material/compare_arrows: SO SÁNH BIẾN ĐỘNG")
         split_month = st.selectbox(
             "Tháng kết thúc kỳ trước",
             options=month_list[:-1],
@@ -2038,7 +2038,7 @@ with tab_overview:
         f"{high_risk:,} NPP mức cao/rất cao"
     )
 
-    st.markdown("### Đánh giá các trụ cột kiểm soát")
+    st.markdown("### :material/rule: Đánh giá các trụ cột kiểm soát")
     quality_col, warehouse_col, business_col = st.columns(3)
     with business_col:
         if revenue_change is None and quantity_change is None:
@@ -2108,7 +2108,7 @@ with tab_overview:
             f"dòng thiếu ngày chứng từ trong toàn bộ dữ liệu: {undated_count}."
         )
 
-    st.markdown("### Đánh giá tự động theo từng trụ cột")
+    st.markdown("### :material/psychology: Đánh giá tự động theo từng trụ cột")
     st.caption(
         "Hệ thống sử dụng quy tắc định lượng, ngưỡng cảnh báo và bằng chứng trong workbook "
         "để tạo nhận định, căn cứ, việc cần xác minh và mức ưu tiên. Đây là AI hỗ trợ sàng lọc có thể giải thích; "
@@ -2116,7 +2116,7 @@ with tab_overview:
     )
     st.dataframe(ai_assessment, use_container_width=True, hide_index=True)
 
-    st.markdown("### Nhận xét tự động")
+    st.markdown("### :material/auto_awesome: Nhận xét tự động")
     if not auto_comments:
         st.info("Chưa phát sinh nhận xét tự động; cần kiểm tra các báo cáo chi tiết.")
     else:
@@ -2134,7 +2134,7 @@ with tab_overview:
                 unsafe_allow_html=True
             )
 
-    st.markdown("### 1.1 Kết quả kiểm soát kho theo ngày")
+    st.markdown("### :material/calendar_view_day: Kết quả kiểm soát kho theo ngày")
     st.caption("Cột: số sự kiện kho phù hợp, kho cần xác minh, chưa đủ căn cứ. Đường: tỷ lệ phù hợp trực tiếp.")
     if daily_summary.empty or (
         (daily_summary[["Kho_phu_hop", "Kho_can_xac_minh", "Kho_chua_ket_luan"]].sum().sum()) == 0
@@ -2179,7 +2179,7 @@ with tab_overview:
         fig.update_yaxes(range=[0, 100], secondary_y=True)
         st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("### 1.2 Bảng tổng hợp theo ngày")
+    st.markdown("### :material/table_chart: Bảng tổng hợp theo ngày")
     if daily_summary.empty:
         st.info("Không có dữ liệu theo ngày.")
     else:
@@ -2239,7 +2239,7 @@ with tab_overview:
             key="business_daily_export",
         )
 
-    st.markdown("### NPP cần ưu tiên xác minh")
+    st.markdown("### :material/person_search: NPP cần ưu tiên xác minh")
     if risk_summary.empty:
         st.info("Chưa có dữ liệu đủ điều kiện để lập bảng đánh giá NPP.")
     else:
@@ -2295,7 +2295,7 @@ with tab_sales:
             title=f"Top {top_n} mặt hàng theo doanh thu"
         )
         st.plotly_chart(fig, use_container_width=True)
-    st.markdown("### Cảnh báo biến động doanh thu/sản lượng")
+    st.markdown("### :material/trending_up: Cảnh báo biến động doanh thu/sản lượng")
     if len(monthly_sales) >= 3:
         trend = monthly_sales.copy()
         trend["Doanh_thu_TB_3T_truoc"] = trend["Doanh_thu"].shift(1).rolling(3, min_periods=2).mean()
@@ -2342,7 +2342,7 @@ with tab_monthly:
         k2.metric("NPP tăng mạnh / quay lại", f"{n_growth:,}")
         k3.metric("Cặp dịch chuyển cùng mặt hàng", f"{len(product_shift_review):,}")
 
-        st.markdown("### Danh sách NPP biến động đáng chú ý")
+        st.markdown("### :material/groups: Danh sách NPP biến động đáng chú ý")
         review_view = customer_monthly_review[
             customer_monthly_review["Mẫu hình"] != "Tương đối ổn định"
         ].copy()
@@ -2368,7 +2368,7 @@ with tab_monthly:
                 hide_index=True
             )
 
-        st.markdown("### Diễn biến từng tháng của NPP")
+        st.markdown("### :material/monitoring: Diễn biến từng tháng của NPP")
         monthly_customer_options = sorted(
             monthly_panel["_ten_kh"].dropna().unique().tolist()
         ) if not monthly_panel.empty else []
@@ -2411,7 +2411,7 @@ with tab_monthly:
                 hide_index=True
             )
 
-        st.markdown("### Bất thường tăng/giảm đột ngột trong từng tháng")
+        st.markdown("### :material/warning: Bất thường tăng/giảm đột ngột trong từng tháng")
         if monthly_anomalies.empty:
             st.success("Chưa phát hiện tháng có doanh thu/sản lượng biến động từ 3 lần hoặc giảm xuống 20% trở xuống so với trung vị 3 tháng trước.")
         else:
@@ -2426,7 +2426,7 @@ with tab_monthly:
                 hide_index=True
             )
 
-        st.markdown("### Dấu hiệu dịch chuyển sản lượng cùng mặt hàng và khu vực")
+        st.markdown("### :material/move_up: Dấu hiệu dịch chuyển sản lượng cùng mặt hàng và khu vực")
         st.caption(
             "Đây là danh sách cặp cần xác minh khi một NPP giảm mạnh, NPP khác tăng/mới phát sinh "
             "trên cùng mã hàng và cùng vùng. Không tự động kết luận khách hàng đã chuyển giao."
@@ -2455,7 +2455,7 @@ with tab_warehouse:
     c.metric("Kho HS Home / thiếu dữ liệu", f"{len(warehouse_special) + len(warehouse_unknown):,}")
     if not warehouse_counts.empty:
         st.dataframe(warehouse_counts, use_container_width=True, hide_index=True)
-    st.markdown("### Giao dịch kho ngoài vùng ưu tiên")
+    st.markdown("### :material/wrong_location: Giao dịch kho ngoài vùng ưu tiên")
     if warehouse_evidence.empty:
         st.success("Không có giao dịch ngoài vùng ưu tiên theo ma trận sàng lọc hiện tại.")
     else:
@@ -2494,7 +2494,7 @@ with tab_warehouse:
             "_ngay": "Ngày", "_bien_so_goc": "Biển số xe"
         }), use_container_width=True, hide_index=True)
 
-    st.markdown("### Giao dịch chưa đủ dữ liệu")
+    st.markdown("### :material/assignment_late: Giao dịch chưa đủ dữ liệu")
     if warehouse_unknown.empty:
         st.success("Không có giao dịch kho thiếu thông tin.")
     else:
@@ -2503,7 +2503,7 @@ with tab_warehouse:
             "_ma_kho", "_ten_kho", "_doi_chieu_kho", "_doi_chieu_kho_tong_hop",
             "_kho_vung_file", "_ghi_chu_kho_file", "_ngay"
         ]], use_container_width=True, hide_index=True)
-    st.markdown("### Cách xử lý đề xuất")
+    st.markdown("### :material/task_alt: Cách xử lý đề xuất")
     st.write(
         "1. Xác minh địa chỉ NPP và vùng địa lý thực tế. "
         "2. Lấy 3 số đầu của Số chứng từ (ví dụ 263.18067094 -> 263), rồi tra tên kho trong danh mục. "
@@ -2520,7 +2520,7 @@ with tab_vehicle:
     a.metric("Dòng xe khách hàng", f"{len(customer_vehicle):,}")
     b.metric("Xe nhiều NPP cùng ngày", f"{len(vehicle_day_shared):,}")
     c.metric("Xe nhiều NPP qua nhiều ngày", f"{len(vehicle_period_shared):,}")
-    st.markdown("### Một xe phục vụ nhiều NPP trong cùng ngày")
+    st.markdown("### :material/local_shipping: Một xe phục vụ nhiều NPP trong cùng ngày")
     if vehicle_day_shared.empty:
         st.success("Chưa phát hiện xe hợp lệ phục vụ từ hai NPP trở lên trong cùng ngày.")
     else:
@@ -2531,7 +2531,7 @@ with tab_vehicle:
             "So_kho": "Số kho", "So_dia_diem": "Số địa điểm",
             "So_giao_dich": "Số dòng giao dịch", "Danh_sach_kho": "Danh sách kho"
         }), use_container_width=True, hide_index=True)
-    st.markdown("### Một xe phục vụ nhiều NPP qua nhiều ngày")
+    st.markdown("### :material/directions_car: Một xe phục vụ nhiều NPP qua nhiều ngày")
     if vehicle_period_shared.empty:
         st.success("Chưa phát hiện xe được nhiều NPP sử dụng trong các ngày khác nhau.")
     else:
@@ -2541,7 +2541,7 @@ with tab_vehicle:
             "So_ngay_hoat_dong": "Số ngày hoạt động", "So_giao_dich": "Số dòng giao dịch",
             "Danh_sach_kho": "Danh sách kho"
         }), use_container_width=True, hide_index=True)
-    st.markdown("### Xe khách hàng thiếu hoặc không nhận diện được biển số")
+    st.markdown("### :material/commute: Xe khách hàng thiếu hoặc không nhận diện được biển số")
     invalid_vehicle = customer_vehicle[~customer_vehicle["_bien_so_hop_le"]]
     if invalid_vehicle.empty:
         st.success("Không có biển số thiếu/không đúng định dạng sàng lọc.")
@@ -2553,7 +2553,7 @@ with tab_vehicle:
             "_ten_kh": "NPP", "_ngay": "Ngày", "_chung_tu": "Chứng từ",
             "_bien_so_goc": "Giá trị số xe gốc", "_dia_chi": "Địa chỉ", "_ma_kho": "Mã kho"
         }), use_container_width=True, hide_index=True)
-    st.markdown("### Hướng xác minh")
+    st.markdown("### :material/fact_check: Hướng xác minh")
     st.write(
         "Cùng biển số trong cùng ngày là dấu hiệu cần kiểm tra, chưa đủ để kết luận bất thường. "
         "Đối chiếu giờ lấy hàng, số chứng từ, chủ xe, tài xế, người nhận và lộ trình. "
@@ -2601,7 +2601,7 @@ with tab_risk:
                     use_container_width=True,
                     hide_index=True
                 )
-            st.markdown("### Giao dịch làm căn cứ")
+            st.markdown("### :material/receipt_long: Giao dịch làm căn cứ")
             st.dataframe(evidence[[
                 "_ngay", "_chung_tu", "_dia_chi", "_vung", "_ma_kho", "_ten_kho",
                 "_doi_chieu_kho", "_loai_xe", "_bien_so_goc",
@@ -2614,7 +2614,7 @@ with tab_risk:
                 "_ma_hang": "Mã hàng", "_ten_hang": "Tên hàng"
             }), use_container_width=True, hide_index=True)
 
-    st.markdown("### Thang màu")
+    st.markdown("### :material/palette: Thang màu")
     cols = st.columns(5)
     legend = [
         ("XANH", "0–24 điểm", "risk-low"),
