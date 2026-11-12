@@ -149,8 +149,12 @@ def analyze_customer_pickups(
         elif status == "Phù hợp danh mục kho" and "khong hop ly" in note_norm:
             status = "Mâu thuẫn: ma trận phù hợp nhưng Ghi chú2 ghi Không hợp lý"
 
+        customer_key = clean(row.get("Mã khách hàng")) or norm(row.get("Tên khách hàng"))
+        document_number = clean(row.get(document_col))
+        event_key = f"{customer_key}|{document_number}" if document_number else f"ROW|{index}"
         rows.append({
             "_source_index": index,
+            "_event_key": event_key,
             "Ngày chứng từ": row.get("Ngày chứng từ"),
             "Số chứng từ": clean(row.get(document_col)),
             "Mã khách hàng": clean(row.get("Mã khách hàng")),
@@ -165,9 +169,23 @@ def analyze_customer_pickups(
             "Kết quả đối chiếu": status,
             "Ghi chú gốc": original_note,
         })
-    detail = pd.DataFrame(rows)
-    if detail.empty:
-        return detail, pd.DataFrame(), pd.DataFrame()
+    line_detail = pd.DataFrame(rows)
+    if line_detail.empty:
+        return line_detail, pd.DataFrame(), pd.DataFrame()
+
+    # OM-055 has one row per item line. Summarize one event per customer/document
+    # so multi-line invoices do not inflate exception counts.
+    event_rows = []
+    for _, group in line_detail.groupby("_event_key", sort=False, dropna=False):
+        record = group.iloc[0].to_dict()
+        record["Số dòng hàng"] = len(group)
+        statuses = set(group["Kết quả đối chiếu"].dropna().astype(str))
+        if len(statuses) > 1:
+            record["Kết quả đối chiếu"] = "Mâu thuẫn dữ liệu giữa các dòng cùng chứng từ"
+        notes = sorted(set(x for x in group["Ghi chú gốc"].astype(str) if x.strip()))
+        record["Ghi chú gốc"] = " | ".join(notes)
+        event_rows.append(record)
+    detail = pd.DataFrame(event_rows)
 
     customer_summary = (
         detail.groupby(["Mã khách hàng", "Tên khách hàng"], dropna=False)
@@ -178,6 +196,7 @@ def analyze_customer_pickups(
                 "Ngoài danh mục kho hợp lý",
                 "Mâu thuẫn: ma trận ngoài danh mục nhưng Ghi chú2 ghi Hợp lý",
                 "Mâu thuẫn: ma trận phù hợp nhưng Ghi chú2 ghi Không hợp lý",
+                "Mâu thuẫn dữ liệu giữa các dòng cùng chứng từ",
             ]).sum()),
             Số_chưa_đủ_dữ_liệu=("Kết quả đối chiếu", lambda s: s.str.startswith(("Chưa", "Thiếu", "Mã kho")).sum()),
             Số_biển_số=("Biển số xe", lambda s: s[s.astype(str).str.strip().ne("")].nunique()),
