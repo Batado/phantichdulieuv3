@@ -62,6 +62,21 @@ def find_col(frame: pd.DataFrame, aliases: list[str]) -> str | None:
     return None
 
 
+@st.cache_data(show_spinner="Đang phân tích dữ liệu kho...", max_entries=3)
+def analyze_cached(transactions, matrix, address_col, warehouse_code_col, document_col,
+                   method_col, warehouse_name_col, plate_col):
+    return analyze_customer_pickups(
+        transactions,
+        matrix,
+        address_col=address_col,
+        warehouse_code_col=warehouse_code_col,
+        document_col=document_col,
+        method_col=method_col,
+        warehouse_name_col=warehouse_name_col,
+        plate_col=plate_col,
+    )
+
+
 uploaded = st.file_uploader(
     "Tải workbook Excel (.xlsx)",
     type=["xlsx"],
@@ -96,15 +111,15 @@ try:
         document_col=document_col,
         order_type_col=order_type_col,
     )
-    detail, customer_summary, province_summary = analyze_customer_pickups(
+    detail, customer_summary, province_summary = analyze_cached(
         transactions,
         matrix,
-        address_col=address_col,
-        warehouse_code_col=warehouse_code_col,
-        document_col=document_col,
-        method_col=method_col,
-        warehouse_name_col=warehouse_name_col or "Kho lấy hàng",
-        plate_col=plate_col or "Số xe",
+        address_col,
+        warehouse_code_col,
+        document_col,
+        method_col,
+        warehouse_name_col or "Kho lấy hàng",
+        plate_col or "Số xe",
     )
 except Exception as exc:
     st.error(f"Không thể đọc hoặc phân tích workbook: {exc}")
