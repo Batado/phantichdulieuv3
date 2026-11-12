@@ -192,7 +192,34 @@ def analyze_customer_pickups(
     vehicle_mask = transactions[method_col].map(classify_customer_vehicle)
     source = transactions.loc[vehicle_mask].copy()
     if source.empty:
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        # Keep a stable schema even when this workbook/filtered period has no
+        # customer-owned vehicle transactions. Older dashboard builds index
+        # these columns directly; returning schema-less frames caused KeyError.
+        detail_columns = [
+            "_event_key", "_source_index", "Ngày chứng từ", "Số chứng từ",
+            "Loại đơn hàng", "Mã khách hàng", "Tên khách hàng",
+            "Địa chỉ khách hàng", "Tỉnh/thành nhận diện", "Miền2 theo workbook",
+            "Khu vực theo workbook", "Đối chiếu Khu vực với địa chỉ",
+            "Đơn vị khớp ma trận", "Cấp độ khớp ma trận", "Hình thức lấy hàng",
+            "Biển số xe", "Mã kho thực tế", "Mã kho tại cột dữ liệu",
+            "Tên kho thực tế", "Mã kho được phép", "Kết quả đối chiếu",
+            "Ghi chú gốc", "Doanh thu", "Số lượng", "Khối lượng", "Số dòng hàng",
+        ]
+        customer_columns = [
+            "Mã khách hàng", "Tên khách hàng", "Số_chứng_từ",
+            "Số_phù_hợp", "Số_ngoài_danh_mục", "Số_chưa_đủ_dữ_liệu",
+            "Số_biển_số", "Doanh_thu", "Sản_lượng", "Khối_lượng",
+            "Tỷ lệ phù hợp (%)", "Mức ưu tiên",
+        ]
+        province_columns = [
+            "Tỉnh/thành nhận diện", "Miền2 theo workbook",
+            "Tên kho thực tế", "Kết quả đối chiếu", "Số chứng từ",
+        ]
+        return (
+            pd.DataFrame(columns=detail_columns),
+            pd.DataFrame(columns=customer_columns),
+            pd.DataFrame(columns=province_columns),
+        )
 
     source["_address"] = source[address_col].map(clean)
     source["_source_region"] = source[region_col].map(clean) if region_col in source.columns else ""
