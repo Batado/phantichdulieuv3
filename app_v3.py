@@ -694,7 +694,8 @@ def prepare_transaction_frame(source: pd.DataFrame, mapping_items: tuple, wareho
     frame["_chung_tu"] = get_col("document").map(clean)
     frame["_dia_chi"] = get_col("address").map(clean)
     frame["_mien_goc"] = get_col("region").map(clean)
-    frame["_ma_kho"] = get_col("document").map(extract_warehouse_code)
+    frame["_khu_vuc_file"] = get_col("locality").map(clean)
+    frame["_ma_kho" = get_col("document").map(extract_warehouse_code)
     frame["_ten_kho"] = frame["_ma_kho"].map(warehouse_name)
     frame["_kho_vung_file"] = get_col("warehouse_region_file").map(clean)
     frame["_ghi_chu_kho_file"] = get_col("warehouse_note_file").map(clean)
@@ -731,7 +732,7 @@ def prepare_transaction_frame(source: pd.DataFrame, mapping_items: tuple, wareho
     pickup_input["Ngày chứng từ"] = frame["_ngay"]
     pickup_input["Loại đơn hàng"] = frame["_loai_don_hang"]
     pickup_input["Miền2"] = frame["_mien_goc"]
-    pickup_input["Khu vưc"] = get_col("locality").map(clean)
+    pickup_input["Khu vưc"] = frame["_khu_vuc_file"]
     pickup_input["Ghi chú2"] = frame["_ghi_chu_kho_file"]
     pickup_input["Thành tiền bán"] = frame["_doanh_thu"]
     pickup_input["Số lượng"] = frame["_san_luong"]
@@ -748,6 +749,7 @@ def prepare_transaction_frame(source: pd.DataFrame, mapping_items: tuple, wareho
     allowed_map = pickup_detail.set_index("_event_key")["Mã kho được phép"] if not pickup_detail.empty else pd.Series(dtype=str)
     province_map = pickup_detail.set_index("_event_key")["Tỉnh/thành nhận diện"] if not pickup_detail.empty else pd.Series(dtype=str)
     matrix_location_map = pickup_detail.set_index("_event_key")["Đơn vị khớp ma trận"] if not pickup_detail.empty else pd.Series(dtype=str)
+    locality_check_map = pickup_detail.set_index("_event_key")["Đối chiếu Khu vực với địa chỉ"] if not pickup_detail.empty else pd.Series(dtype=str)
     frame["_doi_chieu_kho_tong_hop"] = "Không áp dụng - xe nhà máy/thuê ngoài hoặc chưa xác định"
     customer_vehicle_mask = frame["_loai_xe"].eq("Xe khách hàng")
     frame.loc[customer_vehicle_mask, "_doi_chieu_kho_tong_hop"] = (
@@ -757,6 +759,7 @@ def prepare_transaction_frame(source: pd.DataFrame, mapping_items: tuple, wareho
     frame["_kho_hop_ly_theo_dia_chi"] = frame["_event_key"].map(allowed_map).fillna("")
     frame["_tinh_thanh_nhan_dien"] = frame["_event_key"].map(province_map).fillna("")
     frame["_don_vi_khop_ma_tran"] = frame["_event_key"].map(matrix_location_map).fillna("")
+    frame["_doi_chieu_dia_ban"] = frame["_event_key"].map(locality_check_map).fillna("")
     frame["_ly_do_doi_chieu_kho"] = (
         frame["_doi_chieu_kho_tong_hop"].astype(str)
         + " | Tỉnh/thành: " + frame["_tinh_thanh_nhan_dien"].astype(str)
@@ -2459,6 +2462,7 @@ elif selected_analysis == "Đối chiếu kho":
             "_ten_kh", "_dia_chi", "_mien_goc", "_vung", "_chung_tu", "_ma_kho", "_ten_kho",
             "_doi_chieu_kho", "_doi_chieu_kho_tong_hop", "_kho_hop_ly_theo_dia_chi",
             "_tinh_thanh_nhan_dien", "_don_vi_khop_ma_tran",
+            "_khu_vuc_file", "_doi_chieu_dia_ban",
             "_ly_do_doi_chieu_kho", "_kho_vung_file", "_ghi_chu_kho_file", "_ngay", "_bien_so_goc"
         ]].rename(columns={
             "_ten_kh": "NPP", "_dia_chi": "Địa chỉ", "_mien_goc": "Miền2 gốc",
@@ -2468,6 +2472,8 @@ elif selected_analysis == "Đối chiếu kho":
             "_kho_hop_ly_theo_dia_chi": "Mã kho được phép theo ma trận",
             "_tinh_thanh_nhan_dien": "Tỉnh/thành từ địa chỉ",
             "_don_vi_khop_ma_tran": "Địa bàn khớp ma trận",
+            "_khu_vuc_file": "Khu vực theo workbook",
+            "_doi_chieu_dia_ban": "Đối chiếu Khu vực với địa chỉ",
             "_ly_do_doi_chieu_kho": "Lý do đánh giá",
             "_kho_vung_file": "Kho vùng miền ghi trong file",
             "_ghi_chu_kho_file": "Ghi chú gốc trong file", "_ngay": "Ngày",
