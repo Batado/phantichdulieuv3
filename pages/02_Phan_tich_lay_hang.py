@@ -561,7 +561,31 @@ elif pickup_section == "Đối chiếu kho":
         view = detail if chosen_status == "Tất cả" else detail[detail["Kết quả đối chiếu"].eq(chosen_status)]
         st.caption(f"{len(view):,} chứng từ trong kết quả lọc. Hiển thị tối đa 2.000 dòng; tải Excel để xem toàn bộ.")
         st.dataframe(view.head(2000), use_container_width=True, hide_index=True)
-        st.markdown("**Tổng hợp theo tỉnh/thành, kho và kết quả**")
+        st.markdown("**Kiểm tra phân vùng kinh doanh và địa bàn**")
+        region_values = detail["Miền2 theo workbook"].fillna("").astype(str).str.strip()
+        locality_values = detail["Đối chiếu Khu vực với địa chỉ"].fillna("").astype(str)
+        province_values = detail["Tỉnh/thành nhận diện"].fillna("").astype(str).str.strip()
+        r1, r2, r3 = st.columns(3)
+        r1.metric("Nhóm Miền2", f"{region_values[region_values.ne('')].nunique():,}")
+        r2.metric("Khu vực khớp địa chỉ", f"{int(locality_values.eq('Khớp thành phần địa chỉ').sum()):,}/{len(detail):,}")
+        r3.metric("Tỉnh/thành chưa có dòng riêng", f"{int(detail['Cấp độ khớp ma trận'].fillna('').str.contains('chưa có dòng riêng', case=False).sum()):,}")
+        region_chart_data = (
+            detail.groupby(["Miền2 theo workbook", "Kết quả đối chiếu"], dropna=False)
+            .size().reset_index(name="Số chứng từ")
+        )
+        if not region_chart_data.empty:
+            fig = px.bar(
+                region_chart_data,
+                x="Miền2 theo workbook",
+                y="Số chứng từ",
+                color="Kết quả đối chiếu",
+                barmode="stack",
+                title="Tình trạng đối chiếu kho theo vùng kinh doanh Miền2",
+            )
+            fig.update_layout(margin=dict(l=10, r=10, t=55, b=10), xaxis_title="", yaxis_title="Số chứng từ")
+            st.plotly_chart(fig, use_container_width=True)
+        st.caption("Miền2 được xem là phân vùng kinh doanh của doanh nghiệp, không tự động đổi theo cách chia vùng địa lý chung. Khu vực được kiểm tra bằng cách đối chiếu với thành phần địa chỉ.")
+        st.markdown("**Tổng hợp theo tỉnh/thành, Miền2, kho và kết quả**")
         st.dataframe(province_summary, use_container_width=True, hide_index=True)
 
 elif pickup_section == "Xe khách hàng":
