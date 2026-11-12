@@ -25,7 +25,7 @@ st.set_page_config(
     page_title="Business Control Intelligence",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 st.markdown("""
@@ -61,6 +61,36 @@ div[data-testid="stMetric"] {background:#fff;padding:10px 12px;border-radius:10p
 div[data-testid="stDataFrame"] {border:1px solid #e2e8f0;border-radius:9px;overflow:hidden;}
 div[data-testid="stExpander"] {border:1px solid #e2e8f0;border-radius:9px;}
 .risk-orange {background:#fff3e8;color:#994d00;border-left:4px solid #f97316;}
+
+/* Compact charcoal interface */
+[data-testid="stAppViewContainer"] {background:#0b0f14!important;color:#e5e7eb!important;}
+[data-testid="stHeader"] {background:rgba(11,15,20,.94)!important;}
+[data-testid="stToolbar"] {background:transparent!important;}
+section[data-testid="stSidebar"] {background:#111820!important;border-right:1px solid #263341!important;}
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h1,
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2,
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 {color:#f3f4f6!important;font-size:1rem!important;margin:.45rem 0!important;}
+.block-container {max-width:1480px;padding-top:1rem;padding-bottom:1.5rem;}
+.main-title {font-size:21px;font-weight:800;color:#f8fafc;margin-bottom:2px;letter-spacing:.01em;}
+.sub-title {font-size:10px;color:#94a3b8;margin-bottom:8px;letter-spacing:.07em;}
+.app-hero {background:linear-gradient(110deg,#151d27 0%,#202c39 100%);border:1px solid #344253;padding:16px 20px;border-radius:12px;color:#f8fafc;margin:8px 0 12px;box-shadow:none;}
+.app-hero-kicker {font-size:9px;letter-spacing:.14em;font-weight:800;color:#93c5fd;}
+.app-hero-title {font-size:20px;font-weight:800;line-height:1.2;margin:5px 0;}
+.app-hero-copy {font-size:11px;color:#cbd5e1;max-width:900px;line-height:1.5;}
+.nav-card {background:#151d27;border:1px solid #2b3948;border-radius:10px;padding:11px 13px;min-height:80px;box-shadow:none;}
+.nav-card-title {font-weight:700;color:#e5edf6;font-size:12px;margin-bottom:3px;}
+.nav-card-copy {color:#94a3b8;font-size:10px;line-height:1.4;}
+div[data-testid="stMetric"] {background:#151d27!important;border:1px solid #2b3948!important;border-radius:10px!important;box-shadow:none!important;padding:10px 12px!important;}
+div[data-testid="stMetricLabel"] {color:#94a3b8!important;font-size:11px!important;}
+div[data-testid="stMetricValue"] {color:#f8fafc!important;font-size:1.65rem!important;}
+div[data-testid="stDataFrame"], div[data-testid="stTable"] {border:1px solid #2b3948;border-radius:9px;overflow:hidden;}
+div[data-testid="stExpander"] {background:#131b24;border:1px solid #2b3948;border-radius:9px;}
+div[data-testid="stTabs"] button {font-size:11px;font-weight:700;color:#aab7c6;}
+div[data-testid="stTabs"] button[aria-selected="true"] {color:#93c5fd!important;}
+div[data-testid="stButton"] button, div[data-testid="stDownloadButton"] button, div[data-testid="stPageLink"] a {border-radius:8px;font-weight:700;}
+div[data-testid="stFileUploader"] section {background:#151d27;border:1px dashed #425366;border-radius:9px;}
+hr {border-color:#293746!important;}
+[data-testid="stAlert"] {border-radius:9px;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -562,26 +592,18 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("#### Truy cập nhanh")
-nav1, nav2, nav3 = st.columns(3, gap="medium")
-with nav1:
-    st.markdown('<div class="nav-card"><div class="nav-card-title">📦 Phân tích kho lấy hàng</div><div class="nav-card-copy">Đối chiếu địa chỉ NPP với ma trận kho; phân tích riêng xe khách hàng, xe nhà máy và xe thuê ngoài.</div></div>', unsafe_allow_html=True)
-    st.page_link("pages/02_Phan_tich_lay_hang.py", label="Mở phân tích kho lấy hàng", icon=":material/warehouse:", use_container_width=True)
-with nav2:
-    st.markdown('<div class="nav-card"><div class="nav-card-title">📊 Tổng quan kinh doanh</div><div class="nav-card-copy">Doanh thu, sản lượng, hành vi mua hàng và biến động giữa các kỳ.</div></div>', unsafe_allow_html=True)
-    st.caption("Khu vực hiện tại")
-with nav3:
-    st.markdown('<div class="nav-card"><div class="nav-card-title">🗃 Hồ sơ kiểm soát</div><div class="nav-card-copy">Lưu phiên phân tích, theo dõi phát hiện, giải trình và bằng chứng.</div></div>', unsafe_allow_html=True)
-    st.caption("Nằm ở cuối trang")
+st.markdown("""
+<div class="app-hero">
+  <div class="app-hero-kicker">CONTROL WORKSPACE</div>
+  <div class="app-hero-title">Kiểm soát kinh doanh Nhà phân phối</div>
+  <div class="app-hero-copy">Tập trung dữ liệu, đánh giá ngoại lệ và truy vết bằng chứng trên cùng một giao diện.</div>
+</div>
+""", unsafe_allow_html=True)
 
 with st.sidebar:
-    st.markdown("## 🧭 ĐIỀU HƯỚNG")
-    st.page_link("app_v3.py", label="Tổng quan kinh doanh", icon=":material/dashboard:", use_container_width=True)
-    st.page_link("pages/02_Phan_tich_lay_hang.py", label="Phân tích kho lấy hàng", icon=":material/warehouse:", use_container_width=True)
-    st.divider()
-    st.markdown("## 1. DỮ LIỆU")
-    uploaded = st.file_uploader("Tải báo cáo Excel (.xlsx)", type=["xlsx"])
-    st.caption("Chọn một workbook mỗi lần phân tích để tránh cộng trùng dữ liệu giữa các báo cáo.")
+    st.markdown("### :material/database: DỮ LIỆU")
+    uploaded = st.file_uploader("Tải báo cáo Excel", type=["xlsx"])
+    st.caption("Mỗi lần phân tích chọn một workbook.")
 
 if uploaded is None:
     st.info("Tải báo cáo Excel để bắt đầu phân tích mới. Bạn vẫn có thể truy cập hồ sơ kiểm soát và sổ phát hiện đã lưu ở bên dưới.")
@@ -600,7 +622,7 @@ if not sheet_options:
     st.stop()
 
 with st.sidebar:
-    st.markdown("## 2. CHỌN SHEET")
+    st.markdown("## :material/table_chart: CHỌN SHEET")
     sheet_names = [x["sheet"] for x in sheet_options]
     best_sheet = sheet_options[0]["sheet"]
     selected_sheet = st.selectbox(
@@ -778,7 +800,7 @@ if not mapped["customer_type"]:
     npp_mask = pd.Series(False, index=df.index)
 
 with st.sidebar:
-    st.markdown("## 3. PHẠM VI NPP")
+    st.markdown("## :material/groups: PHẠM VI NPP")
     found_types = sorted(x for x in df["_loai_kh"].dropna().unique().tolist() if clean(x))
     default_npp_types = [x for x in found_types if norm(x) in NPP_TYPES]
     selected_types = st.multiselect(
@@ -800,7 +822,7 @@ if npp.empty:
 
 # Simple filters. Unmapped rows remain available in the separate data-quality tab.
 with st.sidebar:
-    st.markdown("## 4. BỘ LỌC")
+    st.markdown("## :material/filter_alt: BỘ LỌC")
     regions_found = sorted(x for x in npp["_vung"].unique() if x)
     selected_regions = st.multiselect("Vùng / nhóm địa chỉ", regions_found, default=regions_found)
     customers_found = sorted(npp["_ten_kh"].dropna().unique().tolist())
