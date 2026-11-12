@@ -149,14 +149,16 @@ def _normalize_database_url(raw: str) -> str:
     if "://" not in raw:
         raise ValueError("DATABASE_URL không đúng định dạng URL PostgreSQL.")
     scheme, remainder = raw.split("://", 1)
-    authority, slash, path = remainder.partition("/")
-    user_info, at_sign, host = authority.rpartition("@")
+    user_info, at_sign, host_and_path = remainder.rpartition("@")
     if not at_sign:
         raise ValueError("DATABASE_URL thiếu phần @HOST. Kiểm tra lại chuỗi kết nối Supabase.")
+    host, slash, path = host_and_path.partition("/")
     username, colon, password = user_info.partition(":")
     if not colon or not username or not host:
         raise ValueError("DATABASE_URL thiếu username, password hoặc hostname.")
     # Decode first so already URL-encoded passwords are not double-encoded.
+    # Splitting at the final @ before parsing the host also supports raw @ and /
+    # characters in the password; the password is then percent-encoded safely.
     username = quote(unquote(username), safe="")
     password = quote(unquote(password), safe="")
     if scheme in {"postgres", "postgresql"}:
