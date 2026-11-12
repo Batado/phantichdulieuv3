@@ -1939,7 +1939,7 @@ if selected_analysis == "Tổng quan":
                 "danger": "#c33b35",
             }.get(severity, "#607080")
             st.markdown(
-                f'<div style="border-left:4px solid {color};background:#151b24;border:1px solid #2a3543;'
+                f'<div style="background:#151b24;border:1px solid #2a3543;border-left:4px solid {color};'
                 f'padding:10px 13px;border-radius:9px;margin:6px 0;color:#dbe5ef;">'
                 f'<b>{title}:</b> {message}</div>',
                 unsafe_allow_html=True
