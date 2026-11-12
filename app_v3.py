@@ -61,6 +61,13 @@ p,label {color:#aab5c3;}
 hr {border-color:#293441!important;}
 .stRadio label {color:#cbd5e1!important;}
 .stMultiSelect [data-baseweb="tag"] {background:#16464a!important;}
+.risk-card {background:#171d26;border:1px solid #2a3543;border-radius:12px;padding:14px 15px;min-height:104px;color:#dbe5ef;line-height:1.55;}
+.risk-card b {color:#f4f7fb;letter-spacing:.025em;}
+.risk-low {border-left:4px solid #35cfa9;}
+.risk-watch {border-left:4px solid #e6b85c;}
+.risk-orange {border-left:4px solid #f59e0b;}
+.risk-critical {border-left:4px solid #ef7078;}
+.risk-unknown {border-left:4px solid #718096;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1932,8 +1939,8 @@ if selected_analysis == "Tổng quan":
                 "danger": "#c33b35",
             }.get(severity, "#607080")
             st.markdown(
-                f'<div style="border-left:4px solid {color};background:#f4f6f8;'
-                f'padding:10px 13px;border-radius:7px;margin:6px 0;color:#263241;">'
+                f'<div style="border-left:4px solid {color};background:#151b24;border:1px solid #2a3543;'
+                f'padding:10px 13px;border-radius:9px;margin:6px 0;color:#dbe5ef;">'
                 f'<b>{title}:</b> {message}</div>',
                 unsafe_allow_html=True
             )
