@@ -42,6 +42,28 @@ class ScopeFilterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             apply_business_scope_filter(frame, document_col="Số chứng từ", order_type_col="Loại đơn hàng")
 
+    def test_keeps_real_erp_labels_from_uploaded_om055(self):
+        frame = pd.DataFrame([
+            {"Số chứng từ": "261.10001", "Loại đơn hàng": "HBMC.DON HANG NOI DIA"},
+            {"Số chứng từ": "261.10002", "Loại đơn hàng": "HBMC.DON HANG NOI DIA-DLPP"},
+            {"Số chứng từ": "261.10003", "Loại đơn hàng": "HBMC.TRA HANG - HUY HD"},
+            {"Số chứng từ": "261.10004", "Loại đơn hàng": "HBMC.TRA HANG - KHONG HUY HD"},
+            {"Số chứng từ": "PN.10005", "Loại đơn hàng": "HBMC.DON HANG NOI DIA"},
+            {"Số chứng từ": "261.10006", "Loại đơn hàng": "HBMC.DON HANG BIEU TANG"},
+            {"Số chứng từ": "261.10007", "Loại đơn hàng": "HBMC.DON HANG NOI BO HSG"},
+        ])
+        included, excluded = apply_business_scope_filter(
+            frame, document_col="Số chứng từ", order_type_col="Loại đơn hàng"
+        )
+        self.assertEqual(included["Số chứng từ"].tolist(), [
+            "261.10001", "261.10002", "261.10003", "261.10004"
+        ])
+        self.assertEqual(len(excluded), 3)
+        self.assertEqual(
+            set(included["_loai_don_hang_chuan_hoa"]),
+            {"don hang noi dia", "don hang noi dia dlpp", "tra hang huy hd", "tra hang khong huy hd"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
