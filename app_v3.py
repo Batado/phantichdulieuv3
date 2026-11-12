@@ -531,11 +531,26 @@ def prepare_transaction_frame(source: pd.DataFrame, mapping_items: tuple, wareho
     frame["_event_key"] = frame["_customer_key"] + "|" + frame["_chung_tu"]
     blank_document = frame["_chung_tu"].eq("")
     frame.loc[blank_document, "_event_key"] = "ROW|" + frame.index[blank_document].astype(str)
-    status_map = pickup_detail.set_index("_event_key")["Kết quả đối chiếu"] if not pickup_detail.empty else pd.Series(dtype=str)
-    allowed_map = pickup_detail.set_index("_event_key")["Mã kho được phép"] if not pickup_detail.empty else pd.Series(dtype=str)
-    province_map = pickup_detail.set_index("_event_key")["Tỉnh/thành nhận diện"] if not pickup_detail.empty else pd.Series(dtype=str)
-    matrix_location_map = pickup_detail.set_index("_event_key")["Đơn vị khớp ma trận"] if not pickup_detail.empty else pd.Series(dtype=str)
-    locality_check_map = pickup_detail.set_index("_event_key")["Đối chiếu Khu vực với địa chỉ"] if not pickup_detail.empty else pd.Series(dtype=str)
+    # Defensive join: empty or older/partial analyzer outputs must never crash
+    # the whole dashboard because one optional result column is absent.
+    def pickup_result_map(column: str) -> pd.Series:
+        if (
+            pickup_detail.empty
+            or "_event_key" not in pickup_detail.columns
+            or column not in pickup_detail.columns
+        ):
+            return pd.Series(dtype=object)
+        valid = pickup_detail.loc[pickup_detail["_event_key"].notna()].copy()
+        if valid.empty:
+            return pd.Series(dtype=object)
+        valid["_event_key"] = valid["_event_key"].astype(str)
+        return valid.drop_duplicates("_event_key", keep="last").set_index("_event_key")[column]
+
+    status_map = pickup_result_map("Kết quả đối chiếu")
+    allowed_map = pickup_result_map("Mã kho được phép")
+    province_map = pickup_result_map("Tỉnh/thành nhận diện")
+    matrix_location_map = pickup_result_map("Đơn vị khớp ma trận")
+    locality_check_map = pickup_result_map("Đối chiếu Khu vực với địa chỉ")
     frame["_doi_chieu_kho_tong_hop"] = "Không áp dụng - xe nhà máy/thuê ngoài hoặc chưa xác định"
     customer_vehicle_mask = frame["_loai_xe"].eq("Xe khách hàng")
     frame.loc[customer_vehicle_mask, "_doi_chieu_kho_tong_hop"] = (
