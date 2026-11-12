@@ -1,5 +1,7 @@
 import unittest
 
+# Regression coverage for the source workbook's regional warehouse rules.
+
 import pandas as pd
 
 from modules.pickup_analysis import analyze_customer_pickups
