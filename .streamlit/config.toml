@@ -1,6 +1,6 @@
 [theme]
 base = "dark"
-primaryColor = "#60a5fa"
+primaryColor = "#42d6ce"
 backgroundColor = "#0b0f14"
 secondaryBackgroundColor = "#151d27"
 textColor = "#e5e7eb"
@@ -13,11 +13,11 @@ dataframeHeaderBackgroundColor = "#202c39"
 dataframeHeaderTextColor = "#f8fafc"
 showWidgetBorder = true
 showSidebarBorder = true
-chartCategoricalColors = ["#60a5fa", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#22d3ee"]
+chartCategoricalColors = ["#42d6ce", "#4d8dff", "#9b8cff", "#f2b866", "#f2788a", "#34d399"]
 
 [theme.sidebar]
 backgroundColor = "#111820"
 secondaryBackgroundColor = "#151d27"
 textColor = "#e5e7eb"
-primaryColor = "#60a5fa"
+primaryColor = "#42d6ce"
 borderColor = "#263341"
