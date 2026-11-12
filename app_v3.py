@@ -11,6 +11,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 from modules.control_center import render_control_center
+from modules.scope_filter import apply_business_scope_filter
 
 
 # ============================================================
@@ -136,6 +137,7 @@ ALIASES = {
     "customer": ["Tên khách hàng", "Tên KH", "Khách hàng"],
     "customer_id": ["Mã khách hàng", "Mã KH"],
     "customer_type": ["Loại khách hàng", "Nhóm khách hàng", "Loại KH"],
+    "order_type": ["Loại đơn hàng", "Loại giao dịch", "Transaction Type", "Order Type"],
     "date": ["Ngày chứng từ", "Ngày xuất", "Ngày lấy hàng", "Ngày giao hàng"],
     "time": ["Giờ chứng từ", "Giờ xuất", "Giờ lấy hàng"],
     "document": ["Số chứng từ", "Số CT", "Số phiếu"],
@@ -593,7 +595,7 @@ with st.expander("Nhật ký đọc file và ánh xạ cột", expanded=False):
     st.dataframe(mapping_view, use_container_width=True, hide_index=True)
 
 # Critical fields for the requested analysis.
-required = ["customer", "customer_type", "date", "document", "address", "method", "vehicle"]
+required = ["customer", "customer_type", "order_type", "date", "document", "address", "method", "vehicle"]
 missing = [x for x in required if not mapped.get(x)]
 if missing:
     st.warning(
@@ -610,75 +612,103 @@ if not mapped["customer"]:
 # NORMALIZE AND FILTER NPP
 # ============================================================
 
-df = raw.copy()
-def get_col(key, default=""):
-    col = mapped.get(key)
-    return df[col] if col and col in df.columns else pd.Series([default] * len(df), index=df.index)
+@st.cache_data(show_spinner="Đang chuẩn hóa dữ liệu giao dịch...")
+def prepare_transaction_frame(source: pd.DataFrame, mapping_items: tuple) -> pd.DataFrame:
+    """Cache expensive row normalization so Streamlit widget reruns stay responsive."""
+    local_mapping = dict(mapping_items)
+    frame = source.copy()
 
-df["_ten_kh"] = get_col("customer").map(clean)
-df["_ma_kh"] = get_col("customer_id").map(clean)
-df["_loai_kh"] = get_col("customer_type").map(clean)
-df["_loai_kh_norm"] = df["_loai_kh"].map(norm)
-df["_ngay"] = parse_date_series(get_col("date"))
-df["_gio"] = get_col("time").map(clean)
-df["_chung_tu"] = get_col("document").map(clean)
-df["_dia_chi"] = get_col("address").map(clean)
-df["_mien_goc"] = get_col("region").map(clean)
-df["_ma_kho"] = get_col("document").map(extract_warehouse_code)
-df["_ten_kho"] = df["_ma_kho"].map(warehouse_name)
-df["_kho_vung_file"] = get_col("warehouse_region_file").map(clean)
-df["_ghi_chu_kho_file"] = get_col("warehouse_note_file").map(clean)
-df["_ghi_chu_kho_chuan_hoa"] = df["_ghi_chu_kho_file"].map(classify_workbook_note)
-df["_hinh_thuc_goc"] = get_col("method").map(clean)
-df["_loai_xe"] = df["_hinh_thuc_goc"].map(classify_transport)
-df["_bien_so_goc"] = get_col("vehicle").map(clean)
-df["_bien_so"] = df["_bien_so_goc"].map(clean_plate)
-df["_bien_so_hop_le"] = df["_bien_so"].map(is_valid_plate)
-df["_doanh_thu"] = get_col("revenue").map(parse_number)
-df["_san_luong"] = get_col("quantity").map(parse_number)
-df["_khoi_luong"] = get_col("weight").map(parse_number)
-df["_ma_hang"] = get_col("item_code").map(clean)
-df["_ten_hang"] = get_col("item_name").map(clean)
-df["_vung"] = [
-    identify_region(r, a) for r, a in zip(df["_mien_goc"], df["_dia_chi"])
-]
-df["_doi_chieu_kho"] = [
-    warehouse_check(r, w) for r, w in zip(df["_vung"], df["_ma_kho"])
-]
-df["_doi_chieu_kho_tong_hop"] = [
-    combine_warehouse_review(base, code, file_region, file_note)
-    for base, code, file_region, file_note in zip(
-        df["_doi_chieu_kho"], df["_ma_kho"],
-        df["_kho_vung_file"], df["_ghi_chu_kho_file"]
-    )
-]
-df["_kho_hop_ly_theo_dia_chi"] = [
-    ", ".join(sorted(allowed_warehouses_for_region(region)[0]))
-    if allowed_warehouses_for_region(region)[0] else ""
-    for region in df["_vung"]
-]
-df["_ly_do_doi_chieu_kho"] = [
-    (
-        f"Địa chỉ thuộc {region}; kho thực tế {code} - {warehouse_name(code)}; "
-        f"kho chấp nhận: {', '.join(sorted(allowed_warehouses_for_region(region)[0]))}."
-        if allowed_warehouses_for_region(region)[0] and code in WAREHOUSE_NAMES
-        else (
-            f"Chưa xác định được khu vực từ địa chỉ/miền; mã kho chứng từ: {code or 'trống'}."
-            if not allowed_warehouses_for_region(region)[0]
-            else f"Không trích xuất được mã kho hợp lệ từ số chứng từ: {code or 'trống'}."
+    def get_col(key, default=""):
+        col = local_mapping.get(key)
+        return frame[col] if col and col in frame.columns else pd.Series([default] * len(frame), index=frame.index)
+
+    frame["_ten_kh"] = get_col("customer").map(clean)
+    frame["_ma_kh"] = get_col("customer_id").map(clean)
+    frame["_loai_kh"] = get_col("customer_type").map(clean)
+    frame["_loai_kh_norm"] = frame["_loai_kh"].map(norm)
+    frame["_loai_don_hang"] = get_col("order_type").map(clean)
+    frame["_ngay"] = parse_date_series(get_col("date"))
+    frame["_gio"] = get_col("time").map(clean)
+    frame["_chung_tu"] = get_col("document").map(clean)
+    frame["_dia_chi"] = get_col("address").map(clean)
+    frame["_mien_goc"] = get_col("region").map(clean)
+    frame["_ma_kho"] = get_col("document").map(extract_warehouse_code)
+    frame["_ten_kho"] = frame["_ma_kho"].map(warehouse_name)
+    frame["_kho_vung_file"] = get_col("warehouse_region_file").map(clean)
+    frame["_ghi_chu_kho_file"] = get_col("warehouse_note_file").map(clean)
+    frame["_ghi_chu_kho_chuan_hoa"] = frame["_ghi_chu_kho_file"].map(classify_workbook_note)
+    frame["_hinh_thuc_goc"] = get_col("method").map(clean)
+    frame["_loai_xe"] = frame["_hinh_thuc_goc"].map(classify_transport)
+    frame["_bien_so_goc"] = get_col("vehicle").map(clean)
+    frame["_bien_so"] = frame["_bien_so_goc"].map(clean_plate)
+    frame["_bien_so_hop_le"] = frame["_bien_so"].map(is_valid_plate)
+    frame["_doanh_thu"] = get_col("revenue").map(parse_number)
+    frame["_san_luong"] = get_col("quantity").map(parse_number)
+    frame["_khoi_luong"] = get_col("weight").map(parse_number)
+    frame["_ma_hang"] = get_col("item_code").map(clean)
+    frame["_ten_hang"] = get_col("item_name").map(clean)
+    frame["_vung"] = [
+        identify_region(region, address)
+        for region, address in zip(frame["_mien_goc"], frame["_dia_chi"])
+    ]
+    frame["_doi_chieu_kho"] = [
+        warehouse_check(region, code)
+        for region, code in zip(frame["_vung"], frame["_ma_kho"])
+    ]
+    frame["_doi_chieu_kho_tong_hop"] = [
+        combine_warehouse_review(base, code, file_region, file_note)
+        for base, code, file_region, file_note in zip(
+            frame["_doi_chieu_kho"], frame["_ma_kho"],
+            frame["_kho_vung_file"], frame["_ghi_chu_kho_file"]
         )
+    ]
+    allowed_by_region = {
+        region: ", ".join(sorted(allowed_warehouses_for_region(region)[0]))
+        for region in frame["_vung"].dropna().unique()
+    }
+    frame["_kho_hop_ly_theo_dia_chi"] = frame["_vung"].map(allowed_by_region).fillna("")
+    reason_by_region = {}
+    for region, code in zip(frame["_vung"], frame["_ma_kho"]):
+        allowed = allowed_warehouses_for_region(region)[0]
+        reason_by_region[region] = (
+            f"Địa chỉ thuộc {region}; kho thực tế {code} - {warehouse_name(code)}; "
+            f"kho chấp nhận: {', '.join(sorted(allowed))}."
+            if allowed and code in WAREHOUSE_NAMES
+            else (
+                f"Chưa xác định được khu vực từ địa chỉ/miền; mã kho chứng từ: {code or 'trống'}."
+                if not allowed
+                else f"Không trích xuất được mã kho hợp lệ từ số chứng từ: {code or 'trống'}."
+            )
+        )
+    frame["_ly_do_doi_chieu_kho"] = [
+        reason_by_region.get(region, "") for region in frame["_vung"]
+    ]
+    frame["_customer_key"] = np.where(
+        frame["_ma_kh"].ne(""),
+        frame["_ma_kh"].str.upper(),
+        frame["_ten_kh"].map(norm),
     )
-    for region, code in zip(df["_vung"], df["_ma_kho"])
-]
-df["_customer_key"] = np.where(
-    df["_ma_kh"].ne(""),
-    df["_ma_kh"].str.upper(),
-    df["_ten_kh"].map(norm),
+    frame["_customer_key"] = pd.Series(frame["_customer_key"], index=frame.index).fillna("")
+    frame["_ngay_only"] = frame["_ngay"].dt.date
+    frame["_thang"] = frame["_ngay"].dt.to_period("M").astype(str).replace("NaT", "")
+    frame["_ma_hang_z"] = frame["_ma_hang"].str.upper().str.startswith("Z", na=False)
+    return frame
+
+
+if not mapped.get("order_type") or not mapped.get("document"):
+    st.error("Không nhận diện được cột 'Loại đơn hàng' hoặc 'Số chứng từ'. Hai cột này bắt buộc để lọc đúng phạm vi kiểm soát.")
+    st.stop()
+
+df = prepare_transaction_frame(raw, tuple(mapped.items()))
+df, scope_excluded = apply_business_scope_filter(
+    df,
+    document_col=mapped["document"],
+    order_type_col=mapped["order_type"],
 )
-df["_customer_key"] = pd.Series(df["_customer_key"], index=df.index).fillna("")
-df["_ngay_only"] = df["_ngay"].dt.date
-df["_thang"] = df["_ngay"].dt.to_period("M").astype(str).replace("NaT", "")
-df["_ma_hang_z"] = df["_ma_hang"].str.upper().str.startswith("Z", na=False)
+scope_total = len(raw)
+scope_kept = len(df)
+scope_excluded_pn = int(scope_excluded["_ly_do_ngoai_pham_vi"].str.startswith("Số chứng từ bắt đầu bằng PN").sum())
+scope_excluded_type = len(scope_excluded) - scope_excluded_pn
 
 # NPP classification must be based on Loại khách hàng, not Mã nhóm KH.
 npp_mask = df["_loai_kh_norm"].isin(NPP_TYPES)
