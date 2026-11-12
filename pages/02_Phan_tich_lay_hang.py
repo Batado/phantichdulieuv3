@@ -8,6 +8,11 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+import plotly.io as pio
+
+pio.templates.default = "plotly_dark"
+px.defaults.template = "plotly_dark"
+px.defaults.color_discrete_sequence = ["#45d6cf", "#4d8dff", "#9b8cff", "#f2b866", "#f2788a"]
 
 from modules.pickup_analysis import (
     analyze_customer_pickups,
@@ -26,76 +31,40 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
-html, body, [class*="css"] {font-family:'Be Vietnam Pro',sans-serif;}
-[data-testid="stAppViewContainer"] {background:#f4f7fb;color:#172b4d;}
-[data-testid="stHeader"] {background:rgba(244,247,251,.92);}
-section[data-testid="stSidebar"] {background:#eef3f8;border-right:1px solid #dbe4ef;}
-.block-container {max-width:1580px;padding-top:1.1rem;padding-bottom:2.5rem;}
-.hero {background:linear-gradient(118deg,#102b46 0%,#174d70 58%,#167c83 100%);padding:25px 28px;border-radius:18px;color:white;margin:8px 0 16px;box-shadow:0 10px 30px rgba(16,43,70,.13);}
-.hero-kicker {font-size:10px;letter-spacing:.16em;font-weight:800;opacity:.76;}
-.hero-title {font-size:26px;font-weight:800;line-height:1.28;margin:6px 0;}
-.hero-sub {font-size:13px;opacity:.9;max-width:1050px;line-height:1.55;}
-.section-title {font-size:15px;font-weight:800;color:#214c70;margin:10px 0 9px;letter-spacing:.01em;}
-.section-note {color:#64748b;font-size:12px;margin-top:-5px;margin-bottom:10px;}
-div[data-testid="stMetric"] {background:#fff;border:1px solid #dce5ef;border-radius:12px;padding:12px 14px;box-shadow:0 2px 8px rgba(15,23,42,.025);}
-div[data-testid="stDataFrame"] {border:1px solid #dce5ef;border-radius:11px;overflow:hidden;}
-div[data-testid="stTabs"] button {font-weight:700;font-size:12px;}
-div[data-testid="stDownloadButton"] button {border-radius:10px;font-weight:800;background:#174d70;color:white;border:0;}
-div[data-testid="stPageLink"] a {border-radius:10px;font-weight:700;}
-.finding {box-shadow:0 2px 8px rgba(15,23,42,.025);transition:box-shadow .15s ease;}
-.finding:hover {box-shadow:0 5px 16px rgba(15,23,42,.07);}
-div[data-testid="stMetric"] {background:white;border:1px solid #e2e8f0;border-radius:13px;padding:13px 14px;box-shadow:0 2px 8px rgba(15,23,42,.025);}
-div[data-testid="stDataFrame"] {border:1px solid #e2e8f0;border-radius:11px;overflow:hidden;}
-div[data-testid="stTabs"] button {font-weight:700;}
-div[data-testid="stExpander"] {background:white;border:1px solid #e2e8f0;border-radius:12px;}
-.finding {background:white;border:1px solid #e2e8f0;border-radius:13px;padding:14px 16px;margin:8px 0;}
-.finding-title {font-size:14px;font-weight:800;color:#244c70;margin-bottom:5px;}
-.finding-meta {font-size:11px;font-weight:800;letter-spacing:.04em;color:#64748b;margin-bottom:7px;}
-.finding-body {font-size:13px;color:#334155;line-height:1.55;}
-.pill {display:inline-block;padding:4px 9px;border-radius:30px;font-size:11px;font-weight:800;background:#eef2f7;color:#475569;}
-.pill-high {background:#fee2e2;color:#991b1b;}
-.pill-watch {background:#fef3c7;color:#92400e;}
-.pill-low {background:#dcfce7;color:#166534;}
-div[data-testid="stDownloadButton"] button {border-radius:10px;font-weight:700;}
-
-/* Shared compact charcoal theme */
-[data-testid="stAppViewContainer"] {background:#0b0f14!important;color:#e5e7eb!important;}
-[data-testid="stHeader"] {background:rgba(11,15,20,.94)!important;}
-section[data-testid="stSidebar"] {background:#111820!important;border-right:1px solid #263341!important;}
-.block-container {max-width:1480px;padding-top:.9rem;padding-bottom:1.5rem;}
-.hero {background:linear-gradient(110deg,#151d27 0%,#202c39 100%);border:1px solid #344253;padding:16px 20px;border-radius:12px;color:#f8fafc;margin:6px 0 12px;box-shadow:none;}
-.hero-kicker {font-size:9px;letter-spacing:.14em;font-weight:800;color:#93c5fd;}
-.hero-title {font-size:20px;font-weight:800;line-height:1.2;margin:5px 0;}
-.hero-sub {font-size:11px;color:#cbd5e1;max-width:1000px;line-height:1.45;}
-.section-title {font-size:13px;font-weight:800;color:#cbd5e1;margin:8px 0;letter-spacing:.04em;}
-.section-note {color:#94a3b8;font-size:11px;margin-top:-4px;margin-bottom:8px;}
-div[data-testid="stMetric"] {background:#151d27!important;border:1px solid #2b3948!important;border-radius:9px!important;padding:9px 11px!important;box-shadow:none!important;}
-div[data-testid="stMetricLabel"] {color:#94a3b8!important;font-size:10px!important;}
-div[data-testid="stMetricValue"] {color:#f8fafc!important;font-size:1.55rem!important;}
-div[data-testid="stDataFrame"],div[data-testid="stTable"] {border:1px solid #2b3948;border-radius:9px;overflow:hidden;}
-div[data-testid="stTabs"] button {font-weight:700;font-size:11px;color:#aab7c6;}
-div[data-testid="stTabs"] button[aria-selected="true"] {color:#93c5fd!important;}
-div[data-testid="stExpander"] {background:#131b24;border:1px solid #2b3948;border-radius:9px;}
-div[data-testid="stDownloadButton"] button,div[data-testid="stButton"] button {border-radius:8px;font-weight:700;}
-div[data-testid="stFileUploader"] section {background:#151d27;border:1px dashed #425366;border-radius:9px;}
-.finding {background:#151d27;border:1px solid #2b3948;border-radius:10px;padding:11px 13px;margin:6px 0;box-shadow:none;}
-.finding-title {font-size:12px;font-weight:800;color:#e5edf6;margin-bottom:4px;}
-.finding-meta {font-size:10px;font-weight:700;letter-spacing:.03em;color:#94a3b8;margin-bottom:6px;}
-.finding-body {font-size:11px;color:#cbd5e1;line-height:1.5;}
-.pill {display:inline-block;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:800;background:#263341;color:#cbd5e1;}
-.pill-high {background:#4a2228;color:#fecaca;}
-.pill-watch {background:#49391e;color:#fde68a;}
-.pill-low {background:#183d31;color:#bbf7d0;}
-hr {border-color:#293746!important;}
+:root {color-scheme:dark;}
+[data-testid="stAppViewContainer"] {background:#0b0d11!important;color:#e7edf4!important;}
+[data-testid="stHeader"] {background:rgba(11,13,17,.94)!important;}
+[data-testid="stSidebar"] {background:#12161d!important;border-right:1px solid #252d38!important;}
+[data-testid="stSidebarNav"] {display:none!important;}
+.block-container {max-width:1640px;padding-top:1rem;padding-bottom:1.5rem;}
+h1,h2,h3,h4 {color:#f4f7fb!important;letter-spacing:-.02em;}
+p,label,.stCaption {color:#aab5c3;}
+[data-testid="stMetric"] {background:#171d26!important;border:1px solid #2a3543!important;border-radius:11px!important;padding:10px 12px!important;}
+[data-testid="stMetricLabel"] {color:#9aa8b8!important;font-size:11px!important;}
+[data-testid="stMetricValue"] {color:#f8fafc!important;font-weight:700!important;}
+[data-testid="stDataFrame"],[data-testid="stTable"] {border:1px solid #293441;border-radius:10px;overflow:hidden;}
+[data-testid="stExpander"] {background:#141a22;border:1px solid #293441;border-radius:10px;}
+[data-testid="stTabs"] button {font-size:11px;font-weight:700;color:#aab5c3;}
+[data-testid="stTabs"] button[aria-selected="true"] {color:#48d7cf!important;border-bottom-color:#48d7cf!important;}
+[data-testid="stFileUploader"] section {background:#171d26;border:1px dashed #405063;border-radius:10px;}
+[data-testid="stButton"] button,[data-testid="stDownloadButton"] button,[data-testid="stPageLink"] a {border-radius:8px;font-weight:700;}
+[data-testid="stDownloadButton"] button {background:#19b9b0;color:#061014;border:0;}
+hr {border-color:#293441!important;}
+.finding {background:#151b24;border:1px solid #2b3745;border-radius:10px;padding:12px 14px;margin:7px 0;}
+.finding-title {font-size:13px;font-weight:800;color:#edf4fa;margin-bottom:4px;}
+.finding-meta {font-size:10px;font-weight:800;letter-spacing:.04em;color:#95a4b5;margin-bottom:6px;}
+.finding-body {font-size:12px;color:#c4ced9;line-height:1.55;}
+.pill {display:inline-block;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:800;background:#27313d;color:#d7e1eb;}
+.pill-high {background:#48262b;color:#ffb8bd;}
+.pill-watch {background:#493a21;color:#f8d68a;}
+.pill-low {background:#183d35;color:#9ce8d4;}
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown("""
-<div class="hero">
-  <div class="hero-kicker">HOA SEN GROUP  /  CONTROL & ANALYTICS</div>
-  <div class="hero-title">PHÂN TÍCH TÍNH HỢP LÝ KHO LẤY HÀNG</div>
-  <div class="hero-sub">Đối chiếu địa chỉ Nhà phân phối với ma trận kho · Phân tích xe khách hàng · Tách riêng xe nhà máy và xe nhà máy thuê ngoài · Cảnh báo có căn cứ, có thể giải trình</div>
+<div style="display:flex;align-items:center;gap:12px;padding:4px 0 14px;border-bottom:1px solid #293441;margin-bottom:14px">
+  <div style="width:38px;height:38px;border-radius:10px;background:#173c42;color:#52e2d6;display:flex;align-items:center;justify-content:center;font-size:20px">▦</div>
+  <div><div style="font-size:17px;font-weight:800;color:#f4f7fb">PHÂN TÍCH KHO LẤY HÀNG</div><div style="font-size:10px;letter-spacing:.1em;color:#8d9cac">BUSINESS CONTROL / WAREHOUSE INTELLIGENCE</div></div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -422,11 +391,26 @@ def build_ai_findings(result: dict) -> pd.DataFrame:
     return pd.DataFrame(findings)
 
 
-uploaded = st.file_uploader(
-    "📂 Tải workbook Excel (.xlsx)",
-    type=["xlsx"],
-    help="Bắt buộc có sheet om-055 và kho lấy hàng. Workbook gốc không bị thay đổi.",
-)
+with st.sidebar:
+    st.markdown("## ◈ BUSINESS CONTROL")
+    st.caption("PHÂN TÍCH KHO LẤY HÀNG")
+    st.page_link("app_v3.py", label="Tổng quan kinh doanh", icon=":material/dashboard:", use_container_width=True)
+    pickup_section = st.radio(
+        "ĐIỀU HƯỚNG",
+        [
+            "AI đánh giá", "NPP cần xác minh", "Đối chiếu kho",
+            "Xe khách hàng", "Xe nhà máy", "Xe nhà máy thuê ngoài", "Nhật ký dữ liệu"
+        ],
+        key="pickup_section_nav",
+    )
+    st.divider()
+    st.markdown("### :material/database: DỮ LIỆU")
+    uploaded = st.file_uploader(
+        "Tải workbook Excel (.xlsx)",
+        type=["xlsx"],
+        help="Cần có sheet om-055 và kho lấy hàng. Workbook gốc không bị thay đổi.",
+    )
+
 if uploaded is None:
     st.info("Tải workbook để chạy phân tích. Hệ thống chỉ đọc dữ liệu, không sửa file gốc.")
     st.stop()
@@ -447,29 +431,19 @@ findings = build_ai_findings(result)
 pn_count = int(excluded["_ly_do_ngoai_pham_vi"].str.startswith("Số chứng từ bắt đầu bằng PN").sum())
 other_excluded = len(excluded) - pn_count
 
-st.markdown('<div class="section-title">01  /  TỔNG QUAN PHẠM VI DỮ LIỆU</div>', unsafe_allow_html=True)
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Tổng dòng OM-055", f"{len(raw):,}")
-k2.metric("Dòng được giữ", f"{len(scoped):,}", help="Chỉ gồm 4 loại đơn hàng được phê duyệt và không có số chứng từ PN.")
-k3.metric("Chứng từ PN bị loại", f"{pn_count:,}")
-k4.metric("Loại đơn hàng khác bị loại", f"{other_excluded:,}")
+if pickup_section == "AI đánh giá":
+    st.markdown("### TỔNG QUAN PHẠM VI DỮ LIỆU")
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Tổng dòng OM-055", f"{len(raw):,}")
+    k2.metric("Dòng được giữ", f"{len(scoped):,}", help="Chỉ gồm 4 loại đơn hàng được phê duyệt và không có số chứng từ PN.")
+    k3.metric("Chứng từ PN bị loại", f"{pn_count:,}")
+    k4.metric("Loại đơn hàng khác bị loại", f"{other_excluded:,}")
+    with st.expander("Quy tắc lọc đang áp dụng", expanded=False):
+        st.write("**Giữ lại:** " + " · ".join(ALLOWED_LABELS))
+        st.write("**Loại:** tất cả số chứng từ bắt đầu bằng PN, không phụ thuộc loại đơn; mọi loại đơn hàng ngoài bốn nhóm trên.")
+        st.caption("Tiền tố ERP như HBMC được chuẩn hóa trước khi so sánh. Không phân biệt chữ hoa/thường, dấu tiếng Việt và dấu phân cách.")
 
-with st.expander("🧾 Quy tắc lọc đang áp dụng", expanded=False):
-    st.write("**Giữ lại:** " + " · ".join(ALLOWED_LABELS))
-    st.write("**Loại:** tất cả số chứng từ bắt đầu bằng PN, không phụ thuộc loại đơn; mọi loại đơn hàng ngoài bốn nhóm trên.")
-    st.caption("Tiền tố ERP như HBMC được chuẩn hóa trước khi so sánh. Không phân biệt chữ hoa/chữ thường, dấu tiếng Việt và dấu phân cách.")
-
-tabs = st.tabs([
-    "01  🧠  AI đánh giá",
-    "02  🎯  NPP xác minh",
-    "03  🏬  Đối chiếu kho",
-    "04  🚚  Xe khách hàng",
-    "05  🏭  Xe nhà máy",
-    "06  🚛  Thuê ngoài",
-    "07  🗂  Nhật ký",
-])
-
-with tabs[0]:
+if pickup_section == "AI đánh giá":
     st.markdown('<div class="section-title">🧠 NHẬN ĐỊNH TỰ ĐỘNG THEO TỪNG ĐẦU MỤC</div>', unsafe_allow_html=True)
     st.caption("Đánh giá có thể giải trình: mỗi nhận định đi kèm số liệu, căn cứ và đề xuất. Đây là bộ máy quy tắc phân tích, không tự kết luận có gian lận hoặc sai phạm.")
     if detail.empty:
@@ -520,7 +494,7 @@ with tabs[0]:
         fig.update_layout(showlegend=False, margin=dict(l=10, r=10, t=55, b=10), plot_bgcolor="white", paper_bgcolor="white")
         st.plotly_chart(fig, use_container_width=True)
 
-with tabs[1]:
+elif pickup_section == "NPP cần xác minh":
     st.markdown('<div class="section-title">🔎 DANH SÁCH NPP CẦN ƯU TIÊN XÁC MINH</div>', unsafe_allow_html=True)
     if customers.empty:
         st.info("Chưa có dữ liệu NPP để tổng hợp.")
@@ -544,7 +518,7 @@ with tabs[1]:
             customer_detail = detail[detail["Mã khách hàng"].astype(str).eq(selected_key)]
             st.dataframe(customer_detail.head(1500), use_container_width=True, hide_index=True)
 
-with tabs[2]:
+elif pickup_section == "Đối chiếu kho":
     st.markdown('<div class="section-title">🏭 ĐỐI CHIẾU ĐỊA CHỈ NPP VỚI MA TRẬN KHO</div>', unsafe_allow_html=True)
     if detail.empty:
         st.info("Không có giao dịch xe khách hàng để đối chiếu.")
@@ -557,7 +531,7 @@ with tabs[2]:
         st.markdown("**Tổng hợp theo tỉnh/thành, kho và kết quả**")
         st.dataframe(province_summary, use_container_width=True, hide_index=True)
 
-with tabs[3]:
+elif pickup_section == "Xe khách hàng":
     st.markdown('<div class="section-title">🚚 PHÂN TÍCH HÌNH THỨC XE KHÁCH HÀNG</div>', unsafe_allow_html=True)
     st.caption("Chỉ xe khách hàng được đối chiếu ma trận kho ở giai đoạn này. Xe nhà máy và xe nhà máy thuê ngoài có khu vực riêng, đang chờ dữ liệu biển số.")
     method_col = result["columns"]["method"]
@@ -584,7 +558,7 @@ with tabs[3]:
             st.dataframe(shared.rename("Số NPP").reset_index().rename(columns={"_bien_so_chuan": "Biển số"}), use_container_width=True, hide_index=True)
         st.caption("Biển số dùng chung cần kiểm tra thêm thời gian lấy hàng, tài xế, người nhận và lộ trình; không tự động kết luận vi phạm.")
 
-with tabs[4]:
+elif pickup_section == "Xe nhà máy":
     st.markdown('<div class="section-title">🏢 XE NHÀ MÁY · KHU VỰC CHỜ BỔ SUNG DỮ LIỆU</div>', unsafe_allow_html=True)
     factory = result["factory_vehicle_source"]
     st.caption("Nhóm này được tách riêng, chưa chấm điểm tính hợp lý kho hoặc xe cho đến khi có danh mục biển số và quy tắc kiểm soát.")
@@ -599,7 +573,7 @@ with tabs[4]:
         st.dataframe(factory.head(1500), use_container_width=True, hide_index=True)
         st.caption("Khi cập nhật biển số, cần bổ sung danh mục xe nhà máy, đơn vị quản lý, lệnh điều xe và thời gian lấy hàng để hệ thống đối chiếu.")
 
-with tabs[5]:
+elif pickup_section == "Xe nhà máy thuê ngoài":
     st.markdown('<div class="section-title">🚛 XE NHÀ MÁY THUÊ NGOÀI · KHU VỰC CHỜ BỔ SUNG DỮ LIỆU</div>', unsafe_allow_html=True)
     outsourced = result["outsourced_vehicle_source"]
     st.caption("Tách riêng khỏi xe nhà máy và xe khách hàng. Chưa đánh giá nhà vận tải/biển số/chi phí cho đến khi có dữ liệu.")
@@ -614,7 +588,7 @@ with tabs[5]:
         st.dataframe(outsourced.head(1500), use_container_width=True, hide_index=True)
         st.caption("Khi cập nhật dữ liệu, bổ sung biển số, nhà vận tải, hợp đồng/đơn thuê xe, lệnh điều xe, phiếu xuất kho và chứng từ chi phí.")
 
-with tabs[6]:
+elif pickup_section == "Nhật ký dữ liệu":
     st.markdown('<div class="section-title">🧹 NHẬT KÝ LỌC, CHẤT LƯỢNG VÀ PHƯƠNG PHÁP</div>', unsafe_allow_html=True)
     st.write(f"**File:** {uploaded.name} · **Sheet giao dịch:** {result['sheet']} · **Sheet ma trận:** {result['matrix_sheet']}")
     st.write(f"**Dòng nguồn:** {len(raw):,} · **Dòng giữ:** {len(scoped):,} · **Dòng loại:** {len(excluded):,}")
