@@ -472,7 +472,7 @@ def prepare_transaction_frame(source: pd.DataFrame, mapping_items: tuple, wareho
     frame["_dia_chi"] = get_col("address").map(clean)
     frame["_mien_goc"] = get_col("region").map(clean)
     frame["_khu_vuc_file"] = get_col("locality").map(clean)
-    frame["_ma_kho" = get_col("document").map(extract_warehouse_code)
+    frame["_ma_kho"] = get_col("document").map(extract_warehouse_code)
     frame["_ten_kho"] = frame["_ma_kho"].map(warehouse_name)
     frame["_kho_vung_file"] = get_col("warehouse_region_file").map(clean)
     frame["_ghi_chu_kho_file"] = get_col("warehouse_note_file").map(clean)
