@@ -1,43 +1,78 @@
 from __future__ import annotations
 
+import html
 import io
 
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
-from modules.pickup_analysis import analyze_customer_pickups, norm
+from modules.pickup_analysis import (
+    analyze_customer_pickups,
+    classify_customer_vehicle,
+    norm,
+)
 from modules.scope_filter import apply_business_scope_filter
 
-st.set_page_config(page_title="Phân tích kho lấy hàng", page_icon="📦", layout="wide")
+st.set_page_config(
+    page_title="AI kiểm soát kho lấy hàng",
+    page_icon="📦",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
 html, body, [class*="css"] {font-family:'Be Vietnam Pro',sans-serif;}
-[data-testid="stAppViewContainer"] {background:#f6f8fc;color:#172b4d;}
-section[data-testid="stSidebar"] {background:#f0f4f9;border-right:1px solid #dce4ef;}
-.block-container {max-width:1500px;padding-top:1.2rem;padding-bottom:2rem;}
-.page-kicker {font-size:.72rem;font-weight:800;letter-spacing:.12em;color:#64748b;}
-.page-title {font-size:1.8rem;font-weight:800;color:#17324d;margin:.15rem 0 .15rem;}
-.page-subtitle {color:#64748b;font-size:.92rem;margin-bottom:1.1rem;}
-.section-head {font-size:1.08rem;font-weight:800;color:#244c70;margin:.4rem 0 .7rem;}
-div[data-testid="stMetric"] {background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;}
-div[data-testid="stDataFrame"] {border:1px solid #e2e8f0;border-radius:10px;}
-div[data-testid="stTabs"] button {font-weight:650;}
+[data-testid="stAppViewContainer"] {background:#f5f7fb;color:#172b4d;}
+[data-testid="stHeader"] {background:rgba(245,247,251,.88);}
+section[data-testid="stSidebar"] {background:#edf2f8;border-right:1px solid #dbe4ef;}
+.block-container {max-width:1540px;padding-top:1.15rem;padding-bottom:2.5rem;}
+.hero {background:linear-gradient(115deg,#102b46 0%,#1b5278 62%,#287d91 100%);padding:24px 28px;border-radius:18px;color:white;margin-bottom:18px;box-shadow:0 8px 28px rgba(18,55,85,.14);}
+.hero-kicker {font-size:11px;letter-spacing:.16em;font-weight:800;opacity:.78;}
+.hero-title {font-size:27px;font-weight:800;line-height:1.3;margin:5px 0;}
+.hero-sub {font-size:13px;opacity:.88;}
+.section-title {font-size:16px;font-weight:800;color:#214c70;margin:10px 0 10px;}
+.section-note {color:#64748b;font-size:12px;margin-top:-5px;margin-bottom:10px;}
+div[data-testid="stMetric"] {background:white;border:1px solid #e2e8f0;border-radius:13px;padding:13px 14px;box-shadow:0 2px 8px rgba(15,23,42,.025);}
+div[data-testid="stDataFrame"] {border:1px solid #e2e8f0;border-radius:11px;overflow:hidden;}
+div[data-testid="stTabs"] button {font-weight:700;}
+div[data-testid="stExpander"] {background:white;border:1px solid #e2e8f0;border-radius:12px;}
+.finding {background:white;border:1px solid #e2e8f0;border-radius:13px;padding:14px 16px;margin:8px 0;}
+.finding-title {font-size:14px;font-weight:800;color:#244c70;margin-bottom:5px;}
+.finding-meta {font-size:11px;font-weight:800;letter-spacing:.04em;color:#64748b;margin-bottom:7px;}
+.finding-body {font-size:13px;color:#334155;line-height:1.55;}
+.pill {display:inline-block;padding:4px 9px;border-radius:30px;font-size:11px;font-weight:800;background:#eef2f7;color:#475569;}
+.pill-high {background:#fee2e2;color:#991b1b;}
+.pill-watch {background:#fef3c7;color:#92400e;}
+.pill-low {background:#dcfce7;color:#166534;}
+div[data-testid="stDownloadButton"] button {border-radius:10px;font-weight:700;}
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="page-kicker">HOA SEN GROUP · KIỂM SOÁT KINH DOANH</div>', unsafe_allow_html=True)
-st.markdown('<div class="page-title">Phân tích hoạt động lấy hàng của nhà phân phối</div>', unsafe_allow_html=True)
-st.markdown('<div class="page-subtitle">Lọc đúng phạm vi chứng từ, đối chiếu kho theo địa chỉ NPP, đánh giá xe khách hàng và tự động lập nhận định có căn cứ.</div>', unsafe_allow_html=True)
+st.markdown("""
+<div class="hero">
+  <div class="hero-kicker">HOA SEN GROUP · BUSINESS CONTROL INTELLIGENCE</div>
+  <div class="hero-title">📦 Phân tích tính hợp lý kho lấy hàng của Nhà phân phối</div>
+  <div class="hero-sub">Tự động lọc phạm vi chứng từ · Đối chiếu địa chỉ NPP với ma trận kho · Sàng lọc xe khách hàng · Sinh nhận định và đề xuất kiểm soát có căn cứ</div>
+</div>
+""", unsafe_allow_html=True)
 
+ALLOWED_LABELS = [
+    "Đơn hàng nội địa",
+    "Đơn hàng nội địa DLPP",
+    "Trả hàng hủy HĐ",
+    "Trả hàng không hủy HĐ",
+]
 READ_COLUMNS = {norm(x) for x in [
     "Số chứng từ", "Loại đơn hàng", "Ngày chứng từ", "Mã khách hàng",
     "Tên khách hàng", "Loại khách hàng", "Địa chỉ", "Mã kho2", "Mã kho",
-    "Kho lấy hàng", "Shipping method", "Số xe", "Ghi chú2",
-    "Thành tiền bán", "Số lượng", "Khối lượng", "Mã hàng", "Tên hàng",
-    "Miền2", "NPP/Dự án",
+    "Kho lấy hàng", "Shipping method", "Hình thức vận chuyển",
+    "Số xe", "Biển số xe", "Ghi chú2", "Thành tiền bán", "Số lượng",
+    "Khối lượng", "Mã hàng", "Tên hàng", "Miền2", "NPP/Dự án",
 ]}
 
 
@@ -49,16 +84,22 @@ def find_col(frame: pd.DataFrame, aliases: list[str]) -> str | None:
     return None
 
 
-@st.cache_data(show_spinner="Đang đọc và phân tích workbook...", max_entries=3)
-def process_workbook(file_bytes: bytes):
+@st.cache_data(show_spinner="Đang đọc workbook và chạy kiểm tra dữ liệu...", max_entries=3)
+def process_workbook(file_bytes: bytes) -> dict:
     xls = pd.ExcelFile(io.BytesIO(file_bytes), engine="openpyxl")
     sheet_lookup = {norm(s): s for s in xls.sheet_names}
     tx_sheet = sheet_lookup.get("om 055")
     matrix_sheet = sheet_lookup.get("kho lay hang")
     if not tx_sheet or not matrix_sheet:
-        raise ValueError("Không tìm thấy đủ sheet 'om-055' và 'kho lấy hàng'. Các sheet hiện có: " + ", ".join(xls.sheet_names))
+        raise ValueError(
+            "Không tìm thấy đủ sheet 'om-055' và 'kho lấy hàng'. "
+            "Sheet hiện có: " + ", ".join(xls.sheet_names)
+        )
 
-    raw = pd.read_excel(io.BytesIO(file_bytes), sheet_name=tx_sheet, engine="openpyxl", usecols=lambda c: norm(c) in READ_COLUMNS)
+    raw = pd.read_excel(
+        io.BytesIO(file_bytes), sheet_name=tx_sheet, engine="openpyxl",
+        usecols=lambda col: norm(col) in READ_COLUMNS,
+    )
     matrix = pd.read_excel(io.BytesIO(file_bytes), sheet_name=matrix_sheet, engine="openpyxl")
     raw.columns = [str(c).strip() for c in raw.columns]
     raw = raw.dropna(how="all").copy()
@@ -78,14 +119,30 @@ def process_workbook(file_bytes: bytes):
     quantity_col = find_col(raw, ["Số lượng", "SL"])
     weight_col = find_col(raw, ["Khối lượng", "KL", "Trọng lượng"])
 
-    required = {"Số chứng từ": document_col, "Loại đơn hàng": order_type_col, "Địa chỉ": address_col,
-                "Hình thức vận chuyển": method_col, "Mã kho/Mã kho2": warehouse_code_col}
-    missing = [label for label, col in required.items() if not col]
+    required = {
+        "Số chứng từ": document_col,
+        "Loại đơn hàng": order_type_col,
+        "Địa chỉ khách hàng": address_col,
+        "Hình thức vận chuyển": method_col,
+        "Mã kho/Mã kho2": warehouse_code_col,
+    }
+    missing = [name for name, col in required.items() if not col]
     if missing:
         raise ValueError("Thiếu cột bắt buộc trong OM-055: " + ", ".join(missing))
 
     raw["_dong_nguon_excel"] = np.arange(len(raw)) + 2
-    scoped, excluded = apply_business_scope_filter(raw, document_col=document_col, order_type_col=order_type_col)
+    scoped, excluded = apply_business_scope_filter(
+        raw, document_col=document_col, order_type_col=order_type_col
+    )
+
+    method_values = (
+        scoped[method_col].fillna("").astype(str).str.strip()
+        .replace("", "(Trống)").value_counts().rename_axis("Hình thức vận chuyển")
+        .reset_index(name="Số dòng")
+    )
+    customer_vehicle_mask = scoped[method_col].map(classify_customer_vehicle)
+    customer_vehicle_source = scoped.loc[customer_vehicle_mask].copy()
+
     detail, customer_summary, province_summary = analyze_customer_pickups(
         scoped, matrix,
         address_col=address_col,
@@ -104,228 +161,385 @@ def process_workbook(file_bytes: bytes):
         weight_col=weight_col or "Khối lượng",
     )
     if not detail.empty:
-        detail["Dòng Excel nguồn"] = detail["_source_index"].map(scoped["_dong_nguon_excel"])
-    return {"sheet": tx_sheet, "raw": raw, "scoped": scoped, "excluded": excluded,
-            "detail": detail, "customer_summary": customer_summary,
-            "province_summary": province_summary,
-            "columns": {"document": document_col, "order_type": order_type_col}}
+        source_line_map = scoped["_dong_nguon_excel"]
+        detail["Dòng Excel nguồn"] = detail["_source_index"].map(source_line_map)
+
+    return {
+        "sheet": tx_sheet, "matrix_sheet": matrix_sheet,
+        "raw": raw, "scoped": scoped, "excluded": excluded,
+        "detail": detail, "customer_summary": customer_summary,
+        "province_summary": province_summary, "method_values": method_values,
+        "customer_vehicle_source": customer_vehicle_source,
+        "columns": {
+            "document": document_col, "order_type": order_type_col,
+            "method": method_col, "address": address_col,
+            "warehouse": warehouse_code_col,
+        },
+    }
+
+
+def risk_level(exception_count: int, incomplete_count: int, total: int) -> str:
+    if total <= 0:
+        return "Chưa đủ dữ liệu"
+    ratio = exception_count / total
+    if exception_count >= 10 or ratio >= 0.15:
+        return "Cao"
+    if exception_count > 0 or incomplete_count > 0:
+        return "Theo dõi"
+    return "Thấp"
 
 
 def build_ai_findings(result: dict) -> pd.DataFrame:
-    detail, scoped, summary, excluded, raw = (
-        result["detail"], result["scoped"], result["customer_summary"],
-        result["excluded"], result["raw"]
-    )
-    pn_count = int(excluded["_ly_do_ngoai_pham_vi"].str.startswith("Số chứng từ bắt đầu bằng PN").sum())
-    other_excluded = len(excluded) - pn_count
-    findings = [{
-        "Đầu mục": "1. Phạm vi dữ liệu",
-        "Kết quả": f"{len(scoped):,}/{len(raw):,} dòng được giữ lại",
-        "Nhận định": f"Đã loại {pn_count:,} chứng từ PN và {other_excluded:,} dòng có loại đơn hàng ngoài bốn nhóm được duyệt.",
-        "Mức ưu tiên": "Kiểm soát phạm vi",
-        "Đề xuất": "Kiểm tra nhật ký loại trừ trước khi phát hành báo cáo; các dòng PN không tham gia đánh giá.",
+    raw, scoped, excluded = result["raw"], result["scoped"], result["excluded"]
+    detail, customers = result["detail"], result["customer_summary"]
+    pn = int(excluded["_ly_do_ngoai_pham_vi"].str.startswith("Số chứng từ bắt đầu bằng PN").sum())
+    other = len(excluded) - pn
+    findings: list[dict] = [{
+        "Biểu tượng": "🧾",
+        "Đầu mục đánh giá": "01 · Phạm vi và tính đầy đủ dữ liệu",
+        "Mức ưu tiên": "Kiểm soát đầu vào",
+        "Kết quả": f"{len(scoped):,}/{len(raw):,} dòng được đưa vào phân tích",
+        "Nhận định tự động": (
+            f"Đã loại {pn:,} dòng có số chứng từ bắt đầu bằng PN (hàng gửi kho) "
+            f"và {other:,} dòng thuộc loại đơn hàng ngoài bốn nhóm được duyệt. "
+            "Phạm vi này được áp dụng trước khi chấm điểm rủi ro."
+        ),
+        "Căn cứ": "Số chứng từ + Loại đơn hàng trong OM-055.",
+        "Đề xuất kiểm soát": "Lưu nhật ký dòng bị loại; đối chiếu tổng số dòng nguồn, dòng giữ lại và dòng loại trước khi phát hành báo cáo.",
     }]
+
+    type_counts = scoped["_loai_don_hang_chuan_hoa"].value_counts()
+    type_text = "; ".join(
+        f"{label}: {int(type_counts.get(key, 0)):,}"
+        for key, label in zip(
+            ["don hang noi dia", "don hang noi dia dlpp", "tra hang huy hd", "tra hang khong huy hd"],
+            ALLOWED_LABELS,
+        )
+    )
+    findings.append({
+        "Biểu tượng": "📑",
+        "Đầu mục đánh giá": "02 · Cơ cấu loại đơn hàng",
+        "Mức ưu tiên": "Thông tin",
+        "Kết quả": f"{len(scoped):,} dòng thuộc 4 loại đơn được duyệt",
+        "Nhận định tự động": type_text + ".",
+        "Căn cứ": "Loại đơn hàng đã chuẩn hóa, không phân biệt hoa/thường, dấu tiếng Việt và tiền tố HBMC.",
+        "Đề xuất kiểm soát": "Định kỳ rà soát loại đơn mới phát sinh; không tự động đưa loại mới vào phạm vi khi chưa được phê duyệt.",
+    })
+
     if detail.empty:
+        method_col = result["columns"]["method"]
+        method_text = "; ".join(
+            f"{r['Hình thức vận chuyển']}: {int(r['Số dòng']):,}"
+            for _, r in result["method_values"].head(12).iterrows()
+        ) or "Không có dữ liệu hình thức vận chuyển."
         findings.append({
-            "Đầu mục": "2. Kho lấy hàng và xe khách hàng",
-            "Kết quả": "Không có giao dịch xe khách hàng đủ điều kiện",
-            "Nhận định": "Không đủ dữ liệu để đánh giá tính hợp lý kho trong phạm vi đã lọc.",
+            "Biểu tượng": "🚚",
+            "Đầu mục đánh giá": "03 · Xe khách hàng và tính hợp lý kho",
             "Mức ưu tiên": "Chưa đủ dữ liệu",
-            "Đề xuất": "Kiểm tra nhãn Shipping method và các điều kiện lọc chứng từ.",
+            "Kết quả": "Chưa nhận diện được giao dịch xe khách hàng",
+            "Nhận định tự động": (
+                "Bộ lọc phạm vi vẫn hoạt động, nhưng không có giá trị ở cột hình thức vận chuyển "
+                "được nhận diện là 'Xe khách hàng'. Các giá trị đọc được: " + method_text
+            ),
+            "Căn cứ": f"Cột hình thức vận chuyển: {method_col}.",
+            "Đề xuất kiểm soát": "Kiểm tra danh mục giá trị Shipping method trong OM-055 và chuẩn hóa nhãn xe khách hàng. Không kết luận kho hợp lý khi chưa có giao dịch để kiểm tra.",
         })
         return pd.DataFrame(findings)
 
     total = len(detail)
-    fit = int(detail["Kết quả đối chiếu"].eq("Phù hợp danh mục kho").sum())
-    exception = int(detail["Kết quả đối chiếu"].str.startswith(("Ngoài", "Mâu thuẫn")).sum())
+    status = detail["Kết quả đối chiếu"].fillna("")
+    fit = int(status.eq("Phù hợp danh mục kho").sum())
+    exception = int(status.str.startswith(("Ngoài", "Mâu thuẫn")).sum())
     incomplete = total - fit - exception
-    rate = fit / (fit + exception) * 100 if fit + exception else np.nan
-    flagged = int(summary["Số_ngoài_danh_mục"].gt(0).sum()) if not summary.empty else 0
+    compared = fit + exception
+    fit_rate = fit / compared * 100 if compared else np.nan
+    affected_customers = int(customers["Số_ngoài_danh_mục"].gt(0).sum()) if not customers.empty else 0
     findings.append({
-        "Đầu mục": "2. Tính hợp lý kho lấy hàng",
-        "Kết quả": f"{fit:,}/{total:,} chứng từ phù hợp" + (f" ({rate:.1f}%)" if pd.notna(rate) else ""),
-        "Nhận định": f"{exception:,} chứng từ ngoài danh mục/mâu thuẫn; {incomplete:,} chứng từ chưa đủ dữ liệu; {flagged:,} khách hàng có ít nhất một ngoại lệ.",
-        "Mức ưu tiên": "Cao" if exception >= 10 or exception / max(total, 1) >= .10 else ("Theo dõi" if exception else ("Bổ sung dữ liệu" if incomplete else "Thấp")),
-        "Đề xuất": "Đối chiếu địa chỉ NPP, mã kho được phép, phiếu xuất kho, tồn kho, điều phối vận tải và phê duyệt ngoại lệ. Không kết luận sai phạm chỉ từ ma trận.",
+        "Biểu tượng": "🏭",
+        "Đầu mục đánh giá": "03 · Tính hợp lý kho lấy hàng",
+        "Mức ưu tiên": risk_level(exception, incomplete, total),
+        "Kết quả": f"{fit:,}/{total:,} chứng từ phù hợp" + (f" · {fit_rate:.1f}%" if pd.notna(fit_rate) else ""),
+        "Nhận định tự động": (
+            f"Ghi nhận {exception:,} chứng từ ngoài danh mục hoặc có mâu thuẫn; "
+            f"{incomplete:,} chứng từ chưa đủ dữ liệu; {affected_customers:,} NPP có ít nhất một ngoại lệ. "
+            "Tỷ lệ phù hợp chỉ tính trên nhóm có thể đối chiếu."
+        ),
+        "Căn cứ": "Địa chỉ khách hàng → tỉnh/thành trong sheet kho lấy hàng → mã kho thực tế; đối chiếu thêm Ghi chú2.",
+        "Đề xuất kiểm soát": "Xác minh chứng từ ngoài danh mục bằng phiếu xuất kho, tồn kho tại thời điểm xuất, điều phối, lộ trình và phê duyệt ngoại lệ. Ma trận là tiêu chí sàng lọc, không phải kết luận vi phạm.",
     })
-    top = summary.sort_values(["Số_ngoài_danh_mục", "Số_chứng_từ"], ascending=[False, False]).head(5)
-    top_text = "; ".join(
-        f"{r['Tên khách hàng'] or r['Mã khách hàng']}: {int(r['Số_ngoài_danh_mục'])} chứng từ"
-        for _, r in top.iterrows() if int(r["Số_ngoài_danh_mục"]) > 0
-    )
+
+    top = customers.sort_values(
+        ["Số_ngoài_danh_mục", "Số_chưa_đủ_dữ_liệu", "Số_chứng_từ"],
+        ascending=[False, False, False],
+    ).head(5)
+    top_lines = []
+    for _, row in top.iterrows():
+        if int(row["Số_ngoài_danh_mục"]) or int(row["Số_chưa_đủ_dữ_liệu"]):
+            label = row["Tên khách hàng"] or row["Mã khách hàng"] or "Chưa rõ NPP"
+            top_lines.append(
+                f"{label}: {int(row['Số_ngoài_danh_mục'])} ngoại lệ, "
+                f"{int(row['Số_chưa_đủ_dữ_liệu'])} thiếu dữ liệu"
+            )
     findings.append({
-        "Đầu mục": "3. Khách hàng cần ưu tiên",
-        "Kết quả": f"{flagged:,} khách hàng có ngoại lệ",
-        "Nhận định": top_text or "Chưa có khách hàng ghi nhận chứng từ ngoài danh mục.",
-        "Mức ưu tiên": "Cao" if flagged else "Thấp",
-        "Đề xuất": "Chọn chứng từ mẫu, yêu cầu giải trình lý do chọn kho và cung cấp chứng từ điều phối/phê duyệt.",
+        "Biểu tượng": "🔎",
+        "Đầu mục đánh giá": "04 · NPP cần ưu tiên xác minh",
+        "Mức ưu tiên": "Cao" if affected_customers else ("Theo dõi" if incomplete else "Thấp"),
+        "Kết quả": f"{affected_customers:,} NPP có ngoại lệ theo ma trận",
+        "Nhận định tự động": "; ".join(top_lines) if top_lines else "Chưa ghi nhận NPP có ngoại lệ kho theo ma trận hiện tại.",
+        "Căn cứ": "Số chứng từ ngoài danh mục, mâu thuẫn và dữ liệu chưa đủ theo từng NPP.",
+        "Đề xuất kiểm soát": "Chọn mẫu theo NPP có số ngoại lệ lớn và tỷ lệ ngoại lệ cao; yêu cầu giải trình từng chứng từ, không chỉ giải trình tổng hợp.",
     })
+
     plates = detail["Biển số xe"].fillna("").astype(str).str.strip()
-    valid = plates.ne("") & ~plates.str.lower().isin(["nan", "none"])
-    plate_group = detail.loc[valid].assign(_plate=plates[valid].values)
-    shared = int((plate_group.groupby("_plate")["Mã khách hàng"].nunique() > 1).sum()) if not plate_group.empty else 0
-    missing_plates = int((~valid).sum())
+    has_plate = plates.ne("") & ~plates.str.lower().isin(["nan", "none", "null"])
+    plate_rows = detail.loc[has_plate].copy()
+    plate_rows["_plate_key"] = plates[has_plate].str.upper().str.replace(r"[^A-Z0-9]", "", regex=True).values
+    if not plate_rows.empty:
+        plate_rows["_npp_key"] = plate_rows["Mã khách hàng"].fillna("").astype(str).str.strip()
+        blank_npp = plate_rows["_npp_key"].eq("")
+        plate_rows.loc[blank_npp, "_npp_key"] = plate_rows.loc[blank_npp, "Tên khách hàng"].map(norm)
+        plate_customer_counts = plate_rows.groupby("_plate_key")["_npp_key"].nunique()
+        shared_plates = int(plate_customer_counts.gt(1).sum())
+        top_shared = plate_customer_counts[plate_customer_counts.gt(1)].sort_values(ascending=False).head(5)
+        shared_text = ", ".join(f"{plate}: {int(count)} NPP" for plate, count in top_shared.items())
+    else:
+        shared_plates, shared_text = 0, "Chưa có biển số để đối chiếu."
+    missing_plates = int((~has_plate).sum())
     findings.append({
-        "Đầu mục": "4. Xe khách hàng",
-        "Kết quả": f"{plates[valid].nunique():,} biển số; {shared:,} biển số xuất hiện ở nhiều NPP",
-        "Nhận định": f"{missing_plates:,} chứng từ thiếu biển số. Xe dùng chung là dấu hiệu cần xác minh, không tự động là vi phạm.",
-        "Mức ưu tiên": "Theo dõi" if shared or missing_plates else "Thấp",
-        "Đề xuất": "Đối chiếu ngày/giờ lấy hàng, tài xế, người nhận, lộ trình và hồ sơ sử dụng xe.",
+        "Biểu tượng": "🚛",
+        "Đầu mục đánh giá": "05 · Xe khách hàng và dấu hiệu sử dụng chung",
+        "Mức ưu tiên": "Theo dõi" if shared_plates or missing_plates else "Thấp",
+        "Kết quả": f"{shared_plates:,} biển số xuất hiện ở nhiều NPP · {missing_plates:,} chứng từ thiếu biển số",
+        "Nhận định tự động": (
+            f"Biển số dùng chung ghi nhận: {shared_text}. "
+            "Việc một xe xuất hiện ở nhiều NPP chỉ là dấu hiệu cần kiểm tra, chưa đủ căn cứ kết luận bất thường."
+        ),
+        "Căn cứ": "Biển số xe được chuẩn hóa; đếm số mã NPP khác nhau sử dụng cùng biển số.",
+        "Đề xuất kiểm soát": "Đối chiếu ngày/giờ xuất hàng, tài xế, người nhận, lộ trình, giấy tờ xe và quan hệ giữa các NPP.",
     })
+
+    missing_address = int(detail["Địa chỉ khách hàng"].fillna("").astype(str).str.strip().eq("").sum())
+    missing_warehouse = int(detail["Mã kho thực tế"].fillna("").astype(str).str.strip().eq("").sum())
+    missing_note = int(detail["Ghi chú gốc"].fillna("").astype(str).str.strip().eq("").sum())
     findings.append({
-        "Đầu mục": "5. Doanh thu và sản lượng lấy hàng",
-        "Kết quả": f"Doanh thu {detail['Doanh thu'].sum(min_count=1):,.0f}; số lượng {detail['Số lượng'].sum(min_count=1):,.0f}; khối lượng {detail['Khối lượng'].sum(min_count=1):,.2f}",
-        "Nhận định": "Tổng hợp trên các sự kiện đã gộp theo khách hàng và số chứng từ, tránh đếm lặp hóa đơn nhiều dòng hàng.",
+        "Biểu tượng": "🧩",
+        "Đầu mục đánh giá": "06 · Chất lượng dữ liệu và hồ sơ",
+        "Mức ưu tiên": "Cao" if missing_address or missing_warehouse else ("Theo dõi" if missing_plates or missing_note else "Thấp"),
+        "Kết quả": f"{missing_address:,} thiếu địa chỉ · {missing_warehouse:,} thiếu mã kho · {missing_note:,} thiếu ghi chú",
+        "Nhận định tự động": "Thiếu dữ liệu làm giảm khả năng xác minh và có thể khiến kết quả đối chiếu chưa đầy đủ. Hệ thống giữ riêng nhóm chưa đủ căn cứ, không tự xếp là phù hợp.",
+        "Căn cứ": "Địa chỉ khách hàng, mã kho thực tế, Ghi chú2 và biển số xe.",
+        "Đề xuất kiểm soát": "Yêu cầu đơn vị kinh doanh hoàn thiện trường dữ liệu bắt buộc; theo dõi tỷ lệ thiếu theo NPP và người lập chứng từ.",
+    })
+
+    findings.append({
+        "Biểu tượng": "📈",
+        "Đầu mục đánh giá": "07 · Doanh thu và sản lượng liên quan",
         "Mức ưu tiên": "Thông tin",
-        "Đề xuất": "So sánh theo kỳ, NPP và mặt hàng để phát hiện biến động bất thường.",
-    })
-    findings.append({
-        "Đầu mục": "6. Chất lượng dữ liệu",
-        "Kết quả": f"{incomplete:,} chứng từ chưa đủ căn cứ",
-        "Nhận định": "Dòng thiếu địa chỉ/mã kho được tách riêng, không mặc định là phù hợp hoặc rủi ro thấp.",
-        "Mức ưu tiên": "Cao" if incomplete else "Thấp",
-        "Đề xuất": "Bổ sung địa chỉ chuẩn, mã kho, biển số và hồ sơ chứng từ; theo dõi tỷ lệ hoàn thiện dữ liệu theo đơn vị kinh doanh.",
+        "Kết quả": (
+            f"Doanh thu {detail['Doanh thu'].sum(min_count=1):,.0f} · "
+            f"Số lượng {detail['Số lượng'].sum(min_count=1):,.2f} · "
+            f"Khối lượng {detail['Khối lượng'].sum(min_count=1):,.2f}"
+        ),
+        "Nhận định tự động": "Tổng hợp theo sự kiện khách hàng + số chứng từ, không cộng lặp dòng hàng của cùng một chứng từ.",
+        "Căn cứ": "Thành tiền bán, số lượng và khối lượng trên các giao dịch xe khách hàng trong phạm vi được duyệt.",
+        "Đề xuất kiểm soát": "Đối chiếu doanh thu và sản lượng với kỳ trước, tần suất lấy hàng và quy mô NPP; kiểm tra riêng giao dịch trả hàng.",
     })
     return pd.DataFrame(findings)
 
 
-uploaded = st.file_uploader("Tải workbook Excel (.xlsx)", type=["xlsx"], help="Cần có sheet om-055 và kho lấy hàng.")
+uploaded = st.file_uploader(
+    "📂 Tải workbook Excel (.xlsx)",
+    type=["xlsx"],
+    help="Bắt buộc có sheet om-055 và kho lấy hàng. Workbook gốc không bị thay đổi.",
+)
 if uploaded is None:
-    st.info("Tải file Excel để bắt đầu. File gốc không bị thay đổi.")
+    st.info("Tải workbook để chạy phân tích. Hệ thống chỉ đọc dữ liệu, không sửa file gốc.")
     st.stop()
 
 try:
     result = process_workbook(uploaded.getvalue())
 except Exception as exc:
     st.error(f"Không thể đọc hoặc phân tích workbook: {exc}")
-    st.exception(exc)
+    with st.expander("Chi tiết lỗi kỹ thuật"):
+        st.exception(exc)
     st.stop()
 
 raw, scoped, excluded = result["raw"], result["scoped"], result["excluded"]
-detail, customer_summary, province_summary = result["detail"], result["customer_summary"], result["province_summary"]
+detail = result["detail"]
+customers = result["customer_summary"]
+province_summary = result["province_summary"]
 findings = build_ai_findings(result)
 pn_count = int(excluded["_ly_do_ngoai_pham_vi"].str.startswith("Số chứng từ bắt đầu bằng PN").sum())
 other_excluded = len(excluded) - pn_count
 
-with st.container(border=True):
-    st.markdown("#### PHẠM VI DỮ LIỆU")
-    st.write("**Giữ:** Đơn hàng nội địa · Đơn hàng nội địa DLPP · Trả hàng hủy HĐ · Trả hàng không hủy HĐ")
-    st.write("**Loại:** Chứng từ bắt đầu bằng PN và các loại đơn hàng khác.")
-    a, b, c, d = st.columns(4)
-    a.metric("Dòng OM-055", f"{len(raw):,}")
-    b.metric("Dòng hợp lệ", f"{len(scoped):,}")
-    c.metric("Chứng từ PN bị loại", f"{pn_count:,}")
-    d.metric("Loại đơn hàng khác", f"{other_excluded:,}")
+st.markdown('<div class="section-title">📌 01 · TỔNG QUAN PHẠM VI DỮ LIỆU</div>', unsafe_allow_html=True)
+k1, k2, k3, k4 = st.columns(4)
+k1.metric("Tổng dòng OM-055", f"{len(raw):,}")
+k2.metric("Dòng được giữ", f"{len(scoped):,}", help="Chỉ gồm 4 loại đơn hàng được phê duyệt và không có số chứng từ PN.")
+k3.metric("Chứng từ PN bị loại", f"{pn_count:,}")
+k4.metric("Loại đơn hàng khác bị loại", f"{other_excluded:,}")
 
-tabs = st.tabs(["Tổng quan & AI đánh giá", "NPP cần xác minh", "Chi tiết kho lấy hàng", "Xe khách hàng", "Nhật ký lọc"])
+with st.expander("🧾 Quy tắc lọc đang áp dụng", expanded=False):
+    st.write("**Giữ lại:** " + " · ".join(ALLOWED_LABELS))
+    st.write("**Loại:** tất cả số chứng từ bắt đầu bằng PN, không phụ thuộc loại đơn; mọi loại đơn hàng ngoài bốn nhóm trên.")
+    st.caption("Tiền tố ERP như HBMC được chuẩn hóa trước khi so sánh. Không phân biệt chữ hoa/chữ thường, dấu tiếng Việt và dấu phân cách.")
+
+tabs = st.tabs([
+    "🧠 AI đánh giá",
+    "🔎 NPP cần xác minh",
+    "🏭 Đối chiếu kho",
+    "🚚 Xe khách hàng",
+    "🧹 Nhật ký & dữ liệu",
+])
 
 with tabs[0]:
-    st.markdown('<div class="section-head">BẢN ĐÁNH GIÁ TỰ ĐỘNG</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">🧠 NHẬN ĐỊNH TỰ ĐỘNG THEO TỪNG ĐẦU MỤC</div>', unsafe_allow_html=True)
+    st.caption("Đánh giá có thể giải trình: mỗi nhận định đi kèm số liệu, căn cứ và đề xuất. Đây là bộ máy quy tắc phân tích, không tự kết luận có gian lận hoặc sai phạm.")
     if detail.empty:
-        st.warning("Không có giao dịch xe khách hàng trong phạm vi đã lọc. Xem Nhật ký lọc để kiểm tra.")
+        st.warning("Chưa có giao dịch xe khách hàng được nhận diện. Xem tab 'Xe khách hàng' để kiểm tra phân bố giá trị hình thức vận chuyển.")
     else:
-        total = len(detail)
-        fit = int(detail["Kết quả đối chiếu"].eq("Phù hợp danh mục kho").sum())
-        exception = int(detail["Kết quả đối chiếu"].str.startswith(("Ngoài", "Mâu thuẫn")).sum())
-        incomplete = total - fit - exception
-        rate = fit / (fit + exception) * 100 if fit + exception else 0
-        flagged = int(customer_summary["Số_ngoài_danh_mục"].gt(0).sum()) if not customer_summary.empty else 0
+        status = detail["Kết quả đối chiếu"].fillna("")
+        fit = int(status.eq("Phù hợp danh mục kho").sum())
+        exception = int(status.str.startswith(("Ngoài", "Mâu thuẫn")).sum())
+        incomplete = len(detail) - fit - exception
+        fit_rate = fit / (fit + exception) * 100 if (fit + exception) else 0
+        affected = int(customers["Số_ngoài_danh_mục"].gt(0).sum()) if not customers.empty else 0
         a, b, c, d = st.columns(4)
-        a.metric("Chứng từ xe khách hàng", f"{total:,}")
-        b.metric("Phù hợp ma trận", f"{fit:,}", f"{rate:.1f}% trong nhóm đã đối chiếu")
+        a.metric("Chứng từ xe khách hàng", f"{len(detail):,}")
+        b.metric("Phù hợp danh mục kho", f"{fit:,}", f"{fit_rate:.1f}% nhóm đã đối chiếu")
         c.metric("Ngoài danh mục / mâu thuẫn", f"{exception:,}")
-        d.metric("NPP cần xác minh", f"{flagged:,}")
+        d.metric("NPP có ngoại lệ", f"{affected:,}")
         if exception:
-            st.warning(f"Hệ thống ghi nhận {exception:,} chứng từ cần xác minh thuộc {flagged:,} NPP. Đây là cảnh báo sàng lọc, chưa phải kết luận sai phạm.")
+            st.error(f"⚠️ Có {exception:,} chứng từ cần xác minh tại {affected:,} NPP. Đây là cảnh báo sàng lọc, chưa phải kết luận vi phạm.")
         elif incomplete:
-            st.info(f"Chưa ghi nhận chứng từ ngoài danh mục, nhưng còn {incomplete:,} chứng từ chưa đủ dữ liệu.")
+            st.warning(f"⚠️ Chưa thấy ngoại lệ theo ma trận, nhưng còn {incomplete:,} chứng từ chưa đủ căn cứ.")
         else:
-            st.success("Chưa ghi nhận chênh lệch theo ma trận kho hiện tại.")
-    st.markdown("#### Nhận định theo từng đầu mục")
+            st.success("✓ Chưa ghi nhận chênh lệch theo ma trận kho hiện tại.")
+
     for _, row in findings.iterrows():
-        with st.container(border=True):
-            left, right = st.columns([1, 4])
-            left.markdown(f"**{row['Đầu mục']}**")
-            left.caption(str(row["Mức ưu tiên"]))
-            right.markdown(f"**{row['Kết quả']}**")
-            right.write(row["Nhận định"])
-            right.caption("Đề xuất kiểm soát: " + row["Đề xuất"])
+        level = str(row["Mức ưu tiên"])
+        pill_class = "pill-high" if level == "Cao" else ("pill-watch" if level in {"Theo dõi", "Chưa đủ dữ liệu"} else "pill-low")
+        icon = html.escape(str(row["Biểu tượng"]))
+        heading = html.escape(str(row["Đầu mục đánh giá"]))
+        result_text = html.escape(str(row["Kết quả"]))
+        assessment = html.escape(str(row["Nhận định tự động"]))
+        evidence = html.escape(str(row["Căn cứ"]))
+        recommendation = html.escape(str(row["Đề xuất kiểm soát"]))
+        safe_level = html.escape(level)
+        st.markdown(
+            f'''<div class="finding">
+              <div class="finding-title">{icon} &nbsp; {heading}</div>
+              <div class="finding-meta"><span class="pill {pill_class}">{safe_level}</span> &nbsp; {result_text}</div>
+              <div class="finding-body"><b>Nhận định:</b> {assessment}<br/>
+              <b>Căn cứ:</b> {evidence}<br/>
+              <b>Đề xuất:</b> {recommendation}</div>
+            </div>''',
+            unsafe_allow_html=True,
+        )
+
     if not detail.empty:
         chart = detail["Kết quả đối chiếu"].value_counts().rename_axis("Kết quả").reset_index(name="Số chứng từ")
-        st.plotly_chart(px.bar(chart, x="Kết quả", y="Số chứng từ", text="Số chứng từ"), use_container_width=True)
+        fig = px.bar(chart, x="Kết quả", y="Số chứng từ", color="Kết quả", text_auto=True, title="Phân bố kết quả đối chiếu kho")
+        fig.update_layout(showlegend=False, margin=dict(l=10, r=10, t=55, b=10), plot_bgcolor="white", paper_bgcolor="white")
+        st.plotly_chart(fig, use_container_width=True)
 
 with tabs[1]:
-    st.markdown('<div class="section-head">NPP CẦN ƯU TIÊN XÁC MINH</div>', unsafe_allow_html=True)
-    if customer_summary.empty:
-        st.info("Chưa có dữ liệu tổng hợp NPP.")
+    st.markdown('<div class="section-title">🔎 DANH SÁCH NPP CẦN ƯU TIÊN XÁC MINH</div>', unsafe_allow_html=True)
+    if customers.empty:
+        st.info("Chưa có dữ liệu NPP để tổng hợp.")
     else:
-        priority = customer_summary[customer_summary["Số_ngoài_danh_mục"].gt(0)].sort_values(["Số_ngoài_danh_mục", "Số_chứng_từ"], ascending=[False, False])
+        priority = customers[
+            customers["Số_ngoài_danh_mục"].gt(0) | customers["Số_chưa_đủ_dữ_liệu"].gt(0)
+        ].sort_values(
+            ["Số_ngoài_danh_mục", "Số_chưa_đủ_dữ_liệu", "Số_chứng_từ"],
+            ascending=[False, False, False],
+        )
         if priority.empty:
-            st.success("Chưa phát hiện NPP có chứng từ ngoài danh mục theo ma trận.")
+            st.success("Chưa phát hiện NPP có ngoại lệ hoặc thiếu dữ liệu theo các tiêu chí hiện tại.")
         else:
             st.dataframe(priority, use_container_width=True, hide_index=True)
-            names = priority["Tên khách hàng"].fillna("").astype(str).tolist()
-            selected = st.selectbox("Chọn khách hàng xem chứng từ làm căn cứ", names)
-            st.dataframe(detail[detail["Tên khách hàng"].fillna("").astype(str).eq(selected)], use_container_width=True, hide_index=True)
+            selected_customer = st.selectbox(
+                "Chọn NPP để xem chứng từ làm căn cứ",
+                priority.apply(lambda r: f"{r['Mã khách hàng']} · {r['Tên khách hàng']}", axis=1).tolist(),
+            )
+            selected_key = selected_customer.split(" · ", 1)[0]
+            customer_detail = detail[detail["Mã khách hàng"].astype(str).eq(selected_key)]
+            st.dataframe(customer_detail, use_container_width=True, hide_index=True)
 
 with tabs[2]:
-    st.markdown('<div class="section-head">ĐỐI CHIẾU ĐỊA CHỈ NPP VỚI DANH MỤC KHO</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">🏭 ĐỐI CHIẾU ĐỊA CHỈ NPP VỚI MA TRẬN KHO</div>', unsafe_allow_html=True)
     if detail.empty:
         st.info("Không có giao dịch xe khách hàng để đối chiếu.")
     else:
         statuses = ["Tất cả"] + sorted(detail["Kết quả đối chiếu"].dropna().unique().tolist())
-        selected_status = st.selectbox("Lọc kết quả", statuses, key="warehouse_status_filter")
-        view = detail if selected_status == "Tất cả" else detail[detail["Kết quả đối chiếu"].eq(selected_status)]
+        chosen_status = st.selectbox("Lọc kết quả đối chiếu", statuses, key="filter_warehouse_status")
+        view = detail if chosen_status == "Tất cả" else detail[detail["Kết quả đối chiếu"].eq(chosen_status)]
         st.dataframe(view, use_container_width=True, hide_index=True)
-        st.markdown("#### Tổng hợp theo tỉnh/thành, kho và kết quả")
+        st.markdown("**Tổng hợp theo tỉnh/thành, kho và kết quả**")
         st.dataframe(province_summary, use_container_width=True, hide_index=True)
 
 with tabs[3]:
-    st.markdown('<div class="section-head">PHÂN TÍCH HÌNH THỨC XE KHÁCH HÀNG</div>', unsafe_allow_html=True)
-    st.caption("Xe nhà máy và xe nhà máy thuê ngoài chưa được chấm điểm.")
+    st.markdown('<div class="section-title">🚚 PHÂN TÍCH HÌNH THỨC XE KHÁCH HÀNG</div>', unsafe_allow_html=True)
+    st.caption("Phiên bản hiện tại chỉ đánh giá xe khách hàng. Xe nhà máy và xe nhà máy thuê ngoài được thống kê nhưng chưa chấm điểm.")
+    method_col = result["columns"]["method"]
+    st.markdown("**Phân bố giá trị gốc của cột hình thức vận chuyển trong phạm vi đã lọc**")
+    st.dataframe(result["method_values"], use_container_width=True, hide_index=True)
     if detail.empty:
-        st.info("Không có giao dịch xe khách hàng.")
+        st.warning("Chưa nhận diện được dòng nào là Xe khách hàng. Đối chiếu chính xác nhãn đang có trong bảng trên; nếu nhãn khác, cần bổ sung quy tắc nhận diện.")
     else:
         plates = detail["Biển số xe"].fillna("").astype(str).str.strip()
-        valid = plates.ne("") & ~plates.str.lower().isin(["nan", "none"])
-        plate_data = detail.loc[valid].assign(_plate=plates[valid].values)
-        shared = int((plate_data.groupby("_plate")["Mã khách hàng"].nunique() > 1).sum()) if not plate_data.empty else 0
-        a, b, c = st.columns(3)
-        a.metric("Biển số nhận diện", f"{plates[valid].nunique():,}")
-        b.metric("Biển số xuất hiện ở nhiều NPP", f"{shared:,}")
-        c.metric("Chứng từ thiếu biển số", f"{int((~valid).sum()):,}")
-        if not plate_data.empty:
-            plate_summary = plate_data.groupby("_plate").agg(
-                Số_NPP=("Mã khách hàng", "nunique"),
-                Danh_sách_NPP=("Tên khách hàng", lambda s: " | ".join(sorted(set(s.dropna().astype(str))))),
-                Số_chứng_từ=("Số chứng từ", "nunique"),
-            ).reset_index().rename(columns={"_plate": "Biển số"})
-            st.dataframe(plate_summary.sort_values("Số_NPP", ascending=False), use_container_width=True, hide_index=True)
-        st.caption("Xe dùng chung là tín hiệu cần đối chiếu ngày/giờ lấy hàng, tài xế, người nhận, lộ trình và hồ sơ sử dụng xe; không tự động kết luận vi phạm.")
+        has_plate = plates.ne("") & ~plates.str.lower().isin(["nan", "none", "null"])
+        plate_data = detail.loc[has_plate].copy()
+        plate_data["_bien_so_chuan"] = plates[has_plate].str.upper().str.replace(r"[^A-Z0-9]", "", regex=True).values
+        shared = (
+            plate_data.groupby("_bien_so_chuan")["Mã khách hàng"].nunique()
+            .loc[lambda s: s.gt(1)].sort_values(ascending=False)
+        ) if not plate_data.empty else pd.Series(dtype="int64")
+        x, y, z = st.columns(3)
+        x.metric("Biển số nhận diện", f"{plate_data['_bien_so_chuan'].nunique() if not plate_data.empty else 0:,}")
+        y.metric("Biển số có nhiều NPP", f"{len(shared):,}")
+        z.metric("Chứng từ thiếu biển số", f"{int((~has_plate).sum()):,}")
+        if not shared.empty:
+            st.markdown("**Biển số xuất hiện tại nhiều NPP**")
+            st.dataframe(shared.rename("Số NPP").reset_index().rename(columns={"_bien_so_chuan": "Biển số"}), use_container_width=True, hide_index=True)
+        st.caption("Biển số dùng chung cần kiểm tra thêm thời gian lấy hàng, tài xế, người nhận và lộ trình; không tự động kết luận vi phạm.")
 
 with tabs[4]:
-    st.markdown('<div class="section-head">NHẬT KÝ LỌC VÀ PHƯƠNG PHÁP</div>', unsafe_allow_html=True)
-    st.write(f"**File:** {uploaded.name} · **Sheet:** {result['sheet']}")
-    st.write(f"**Dòng nguồn:** {len(raw):,} · **Dòng giữ lại:** {len(scoped):,} · **Dòng bị loại:** {len(excluded):,}")
+    st.markdown('<div class="section-title">🧹 NHẬT KÝ LỌC, CHẤT LƯỢNG VÀ PHƯƠNG PHÁP</div>', unsafe_allow_html=True)
+    st.write(f"**File:** {uploaded.name} · **Sheet giao dịch:** {result['sheet']} · **Sheet ma trận:** {result['matrix_sheet']}")
+    st.write(f"**Dòng nguồn:** {len(raw):,} · **Dòng giữ:** {len(scoped):,} · **Dòng loại:** {len(excluded):,}")
     if not excluded.empty:
-        st.dataframe(excluded[[result["columns"]["document"], result["columns"]["order_type"], "_loai_don_hang_chuan_hoa", "_ly_do_ngoai_pham_vi"]], use_container_width=True, hide_index=True)
+        doc_col = result["columns"]["document"]
+        type_col = result["columns"]["order_type"]
+        excluded_cols = [c for c in [doc_col, type_col, "_loai_don_hang_chuan_hoa", "_ly_do_ngoai_pham_vi"] if c in excluded.columns]
+        st.dataframe(excluded[excluded_cols], use_container_width=True, hide_index=True)
+    st.markdown("**Phương pháp**")
     st.markdown(
         "- Loại chứng từ PN trước, bất kể loại đơn hàng.\n"
-        "- Bỏ tiền tố ERP HBMC và chuẩn hóa dấu phân cách trước khi nhận diện loại đơn hàng.\n"
-        "- Chỉ giữ bốn loại đơn hàng đã duyệt.\n"
-        "- Chỉ đánh giá kho với Xe khách hàng; xe nhà máy và xe nhà máy thuê ngoài được tách ra.\n"
-        "- Gộp nhiều dòng hàng thành một sự kiện theo Mã khách hàng + Số chứng từ.\n"
-        "- Ngoài danh mục, mâu thuẫn và thiếu dữ liệu là ba nhóm riêng; không tự kết luận vi phạm."
+        "- Chuẩn hóa tiền tố ERP HBMC và dấu phân cách.\n"
+        "- Chỉ giữ đúng bốn loại đơn hàng đã duyệt.\n"
+        "- Chỉ chấm điểm Xe khách hàng; hai nhóm xe nhà máy chưa chấm điểm.\n"
+        "- Đối chiếu địa chỉ NPP với mã kho trong sheet kho lấy hàng.\n"
+        "- Gộp các dòng hàng cùng khách hàng + số chứng từ thành một sự kiện.\n"
+        "- Ngoại lệ, mâu thuẫn và thiếu dữ liệu là các nhóm riêng biệt."
     )
 
-if not detail.empty:
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        findings.to_excel(writer, sheet_name="AI_Danh_gia", index=False)
-        customer_summary.to_excel(writer, sheet_name="Tong_hop_NPP", index=False)
+output = io.BytesIO()
+with pd.ExcelWriter(output, engine="openpyxl") as writer:
+    findings.to_excel(writer, sheet_name="AI_Danh_gia", index=False)
+    if not customers.empty:
+        customers.to_excel(writer, sheet_name="Tong_hop_NPP", index=False)
+    if not province_summary.empty:
         province_summary.to_excel(writer, sheet_name="Tong_hop_tinh_kho", index=False)
+    if not detail.empty:
         detail.to_excel(writer, sheet_name="Chi_tiet_xe_khach_hang", index=False)
-        excluded.to_excel(writer, sheet_name="Nhat_ky_bi_loai", index=False)
-    st.download_button("Tải báo cáo phân tích Excel", data=output.getvalue(),
-        file_name="Bao_cao_AI_kho_lay_hang_xe_khach_hang.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    excluded.to_excel(writer, sheet_name="Nhat_ky_bi_loai", index=False)
+    result["method_values"].to_excel(writer, sheet_name="Thong_ke_hinh_thuc", index=False)
+
+st.download_button(
+    "⬇️ Tải báo cáo phân tích và nhận định tự động",
+    data=output.getvalue(),
+    file_name="Bao_cao_AI_kho_lay_hang.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    use_container_width=True,
+)
