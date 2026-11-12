@@ -372,6 +372,7 @@ with st.sidebar:
 
     selected_analysis = st.session_state.get("business_analysis_nav", "Tổng quan")
     if selected_analysis == "Phân tích kho lấy hàng":
+        st.session_state["business_analysis_nav"] = "Tổng quan"
         st.switch_page("pages/02_Phan_tich_lay_hang.py")
     st.divider()
     st.markdown("### :material/database: DỮ LIỆU")
